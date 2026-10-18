@@ -378,7 +378,69 @@ body.en-seance { overflow: hidden; }
 .btn-danger { color: var(--danger); }
 .btn-danger:hover { border-color: var(--danger); }
 .btn-danger.confirmer { background: var(--danger); color: #1c1012; border-color: var(--danger); font-weight: 600; }
-.fiche-episodes { margin-top: 28px; padding: 18px 20px; border: 1px dashed var(--trait); border-radius: 14px; color: var(--texte-3); font-size: 14px; }
+/* ---------- Épisodes ---------- */
+.episodes { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--trait-doux); }
+.episodes-entete { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.episodes-titre { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 28px; line-height: 1.1; }
+.episodes-resume { margin: 2px 0 0; font-size: 13px; color: var(--texte-2); }
+.episodes-boutons { display: flex; gap: 6px; }
+.episodes-boutons .btn-sobre { height: 36px; padding: 0 14px; font-size: 13px; }
+.episodes-vide { margin: 0; padding: 18px 20px; border: 1px dashed var(--trait); border-radius: 14px; color: var(--texte-3); font-size: 14px; }
+.episodes-suggestion {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 14px; padding: 10px 14px; border-radius: 12px;
+  background: rgba(217, 179, 108, .06); border: 1px solid rgba(217, 179, 108, .2);
+  font-size: 13px; color: var(--texte-2);
+}
+.episodes-suggestion .etoiles { font-size: 13px; vertical-align: -1px; margin: 0 4px; }
+
+.saison { border: 1px solid var(--trait); border-radius: 14px; margin-bottom: 10px; background: rgba(33, 21, 26, .5); overflow: hidden; }
+.saison summary {
+  display: flex; align-items: center; gap: 12px; padding: 13px 16px;
+  cursor: pointer; list-style: none; user-select: none; transition: background .2s;
+}
+.saison summary::-webkit-details-marker { display: none; }
+.saison summary:hover { background: var(--carte); }
+.saison summary:focus-visible { outline: 2px solid var(--or); outline-offset: -2px; }
+.saison-nom { font-family: var(--serif); font-size: 20px; }
+.saison-info { font-size: 13px; color: var(--texte-3); flex: 1; }
+.saison-info .or { color: var(--or); }
+.saison-chevron { width: 18px; height: 18px; fill: none; stroke: var(--texte-3); stroke-width: 2; transition: transform .25s; }
+.saison[open] .saison-chevron { transform: rotate(180deg); }
+
+.episodes-liste { list-style: none; margin: 0; padding: 0 8px 8px; }
+.episode {
+  width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 128px; align-items: center; gap: 12px;
+  padding: 10px 8px; background: none; border: 0; border-top: 1px solid var(--trait-doux);
+  text-align: left; cursor: pointer; border-radius: 8px; transition: background .2s;
+}
+.episodes-liste li:first-child .episode { border-top-color: transparent; }
+.episode:hover { background: var(--carte); }
+.episode:focus-visible { outline: 2px solid var(--or); outline-offset: -2px; }
+.episode-num { font-size: 12px; color: var(--or); font-variant-numeric: tabular-nums; }
+.episode-corps { display: flex; flex-direction: column; min-width: 0; }
+.episode-titre { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.episode-avis { font-size: 12px; color: var(--texte-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.episode-note .etoiles { font-size: 12px; }
+.episode-sans-note { font-size: 12px; color: var(--texte-3); font-style: italic; }
+.episode-date { font-size: 12px; color: var(--texte-3); text-align: right; }
+
+.form-episode {
+  margin: 0 0 12px; padding: 16px; border-radius: 14px;
+  background: var(--carte); border: 1px solid rgba(217, 179, 108, .35);
+  display: grid; gap: 14px;
+}
+.episodes-liste .form-episode { margin: 6px 0; }
+.form-episode-grille { display: grid; grid-template-columns: 100px 100px minmax(0, 220px); gap: 12px; }
+.form-episode-grille .ep-titre { grid-column: 1 / -1; order: 4; }
+.form-episode-grille.lot { grid-template-columns: repeat(3, 110px) minmax(0, 200px); }
+.form-episode .form-champ input { height: 38px; }
+.form-episode .form-champ textarea { min-height: 64px; }
+.form-episode .etoiles-saisie .etoile { font-size: 24px; }
+.form-episode-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.form-episode-actions .espace { flex: 1; }
+.form-episode-actions .btn-sobre, .form-episode-actions .btn-or { height: 36px; font-size: 13px; }
+.lot-aide { margin: 0; }
 
 /* ---------- Formulaire ---------- */
 .form-titre { margin: 0 40px 4px 0; font-family: var(--serif); font-weight: 400; font-size: 38px; line-height: 1.05; }
@@ -434,6 +496,10 @@ fieldset.form-champ { border: 0; margin: 0; padding: 0; min-width: 0; }
   .fiche, .formulaire { grid-template-columns: 1fr; }
   .fiche-affiche { max-width: 220px; }
   .form-apercu { position: static; display: none; }
+  .form-episode-grille, .form-episode-grille.lot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .form-episode-grille .ep-date { grid-column: 1 / -1; }
+  .episode { grid-template-columns: 40px minmax(0, 1fr) auto; }
+  .episode-date { display: none; }
 }
 
 /* ---------- Mobile ---------- */
