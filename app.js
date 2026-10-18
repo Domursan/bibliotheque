@@ -354,7 +354,7 @@
           <div class="fiche-pastilles">
             <span class="pastille or">${type ? type.seul : ""}</span>
             <span class="pastille">${STATUTS[c.statut]}</span>
-            ${c.type === "serie" && progression(c).startsWith("S") ? `<span class="pastille">${progression(c)}</span>` : ""}
+            ${c.type === "serie" ? `<span class="pastille" data-progression ${progression(c).startsWith("S") ? "" : "hidden"}>${progression(c)}</span>` : ""}
           </div>
           <h2 class="fiche-titre" id="seance-titre">${echapper(c.titre)}</h2>
           ${sousTitre ? `<p class="fiche-sous-titre">${sousTitre}</p>` : ""}
@@ -367,11 +367,12 @@
             <button class="btn-or" type="button" data-action="modifier">${ICONE_MODIFIER}Modifier</button>
             <button class="btn-sobre btn-danger" type="button" data-action="supprimer">${ICONE_SUPPRIMER}Supprimer</button>
           </div>
-          ${c.type === "serie" ? `<div class="fiche-episodes">Le suivi et la note par épisode arrivent à l'étape suivante.</div>` : ""}
+          ${c.type === "serie" ? `<section class="episodes" data-episodes aria-label="Épisodes"></section>` : ""}
         </div>
       </article>`;
     ouvrirSeance();
     SEANCE.contenu.querySelector('[data-action="modifier"]').focus({ preventScroll: true });
+    if (c.type === "serie") chargerEpisodes(c);
   }
 
   let minuteurSuppression;
@@ -654,6 +655,329 @@
   }
 
   function ajouter() { ouvrirFormulaire(null); }
+
+  /* =========================================================
+     Épisodes : suivi et note par épisode (séries)
+     ========================================================= */
+  const EPI = { liste: [], contenu: null, edition: null, ouvertes: new Set() };
+  const ICONE_PLUS = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
+  const ICONE_LOT = '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>';
+
+  const zoneEpisodes = () => SEANCE.contenu.querySelector("[data-episodes]");
+  const moyenne = (liste) => {
+    const notes = liste.map((e) => e.note).filter((n) => n != null).map(Number);
+    return notes.length ? notes.reduce((a, b) => a + b, 0) / notes.length : null;
+  };
+  const formaterMoyenne = (m) => m.toLocaleString("fr-CH", { maximumFractionDigits: 1 });
+  const derniereSaison = () => (EPI.liste.length ? Math.max(...EPI.liste.map((e) => e.saison)) : 1);
+  const prochainEpisode = (saison) => {
+    const ep = EPI.liste.filter((e) => e.saison === saison).map((e) => e.episode);
+    return ep.length ? Math.max(...ep) + 1 : 1;
+  };
+  const trier = () => EPI.liste.sort((a, b) => a.saison - b.saison || a.episode - b.episode);
+
+  async function chargerEpisodes(c) {
+    const zone = zoneEpisodes();
+    if (!zone) return;
+    zone.innerHTML = '<p class="episodes-vide">Chargement des épisodes…</p>';
+    const { data, error } = await sb.from("episodes").select("*").eq("contenu_id", c.id).order("saison").order("episode");
+    if (SEANCE.mode !== "fiche" || SEANCE.fiche !== c) return;
+    if (error) { zone.innerHTML = '<p class="form-erreur">Impossible de charger les épisodes. Ferme et rouvre la fiche pour réessayer.</p>'; return; }
+    EPI.liste = data || [];
+    EPI.contenu = c;
+    EPI.edition = null;
+    EPI.ouvertes = new Set([derniereSaison()]);
+    rendreEpisodes();
+  }
+
+  /* ---------- Rendu ---------- */
+  function rendreEpisodes() {
+    const zone = zoneEpisodes();
+    if (!zone) return;
+    const c = EPI.contenu;
+    const moy = moyenne(EPI.liste);
+    const saisons = [...new Set(EPI.liste.map((e) => e.saison))];
+
+    let resume = EPI.liste.length ? `${EPI.liste.length} épisode${EPI.liste.length > 1 ? "s" : ""} suivi${EPI.liste.length > 1 ? "s" : ""}` : "";
+    if (moy != null) resume += ` · moyenne ${formaterMoyenne(moy)} / 5`;
+
+    const arrondi = moy != null ? Math.max(0.5, Math.round(moy * 2) / 2) : null;
+    const suggestion = arrondi != null && Number(c.note) !== arrondi
+      ? `<div class="episodes-suggestion">
+           <span>La moyenne des épisodes donne ${etoiles(arrondi)} ${formaterNote(arrondi)}</span>
+           <button type="button" class="lien-discret" data-ep="moyenne">En faire la note globale</button>
+         </div>`
+      : "";
+
+    zone.innerHTML = `
+      <div class="episodes-entete">
+        <div>
+          <h3 class="episodes-titre">Épisodes</h3>
+          ${resume ? `<p class="episodes-resume">${resume}</p>` : ""}
+        </div>
+        <div class="episodes-boutons">
+          <button type="button" class="btn-sobre" data-ep="lot">${ICONE_LOT}Plusieurs</button>
+          <button type="button" class="btn-sobre" data-ep="nouveau">${ICONE_PLUS}Épisode</button>
+        </div>
+      </div>
+      ${suggestion}
+      ${EPI.edition === "nouveau" ? formEpisode(null) : ""}
+      ${EPI.edition === "lot" ? formLot() : ""}
+      ${!EPI.liste.length && !EPI.edition ? '<p class="episodes-vide">Aucun épisode pour l\'instant. Ajoute ceux que tu as vus pour suivre ta progression et les noter un par un.</p>' : ""}
+      ${saisons.map((s) => {
+        const eps = EPI.liste.filter((e) => e.saison === s);
+        const m = moyenne(eps);
+        return `
+          <details class="saison" data-saison="${s}" ${EPI.ouvertes.has(s) || eps.some((e) => e.id === EPI.edition) ? "open" : ""}>
+            <summary>
+              <span class="saison-nom">${s === 0 ? "Hors-série" : `Saison ${s}`}</span>
+              <span class="saison-info">${eps.length} ép.${m != null ? ` · <span class="or">★</span> ${formaterMoyenne(m)}` : ""}</span>
+              <svg class="saison-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </summary>
+            <ol class="episodes-liste">
+              ${eps.map((e) => (EPI.edition === e.id ? `<li>${formEpisode(e)}</li>` : ligneEpisode(e))).join("")}
+            </ol>
+          </details>`;
+      }).join("")}`;
+
+    zone.querySelectorAll(".etoiles-saisie").forEach(initialiserEtoiles);
+    const premier = zone.querySelector(".form-episode input");
+    if (premier) premier.focus({ preventScroll: false });
+  }
+
+  function ligneEpisode(e) {
+    return `
+      <li>
+        <button type="button" class="episode" data-ep-modifier="${e.id}">
+          <span class="episode-num">É${e.episode}</span>
+          <span class="episode-corps">
+            <span class="episode-titre">${e.titre ? echapper(e.titre) : `Épisode ${e.episode}`}</span>
+            ${e.avis ? `<span class="episode-avis">${echapper(e.avis)}</span>` : ""}
+          </span>
+          <span class="episode-note">${e.note != null ? etoiles(e.note) : '<span class="episode-sans-note">Non noté</span>'}</span>
+          <span class="episode-date">${e.date_visionnage ? formaterDate(e.date_visionnage) : ""}</span>
+        </button>
+      </li>`;
+  }
+
+  function formEpisode(e) {
+    const neuf = !e;
+    const saison = neuf ? derniereSaison() : e.saison;
+    const v = e || { saison, episode: prochainEpisode(saison), date_visionnage: aujourdhui(), note: null };
+    return `
+      <form class="form-episode" data-form-ep="${neuf ? "nouveau" : e.id}" novalidate>
+        <div class="form-episode-grille">
+          <label class="form-champ" data-champ="saison"><span>Saison</span>
+            <input name="saison" type="number" inputmode="numeric" min="0" max="999" step="1" value="${v.saison}"></label>
+          <label class="form-champ" data-champ="episode"><span>Épisode</span>
+            <input name="episode" type="number" inputmode="numeric" min="1" max="9999" step="1" value="${v.episode}"></label>
+          <label class="form-champ ep-titre"><span>Titre</span>
+            <input name="titre" maxlength="200" value="${echapper(v.titre || "")}" placeholder="Facultatif"></label>
+          <label class="form-champ ep-date"><span>Vu le</span>
+            <input name="date_visionnage" type="date" max="2100-12-31" value="${v.date_visionnage || ""}"></label>
+        </div>
+        <div class="form-champ">
+          <span>Note</span>
+          <div class="choix-note">
+            <div class="etoiles-saisie" role="slider" tabindex="0" aria-label="Note de l'épisode" aria-valuemin="0" aria-valuemax="5" data-note="${v.note ?? ""}"></div>
+            <span class="choix-note-valeur" data-note-valeur></span>
+            <button type="button" class="lien-discret" data-effacer-note>Effacer</button>
+          </div>
+        </div>
+        <label class="form-champ"><span>Avis</span>
+          <textarea name="avis" maxlength="3000" rows="2" placeholder="Un mot sur cet épisode">${echapper(v.avis || "")}</textarea></label>
+        <p class="form-erreur" data-erreur-ep></p>
+        <div class="form-episode-actions">
+          ${neuf ? "" : `<button type="button" class="btn-sobre btn-danger" data-ep="supprimer" data-id="${e.id}">${ICONE_SUPPRIMER}Supprimer</button>`}
+          <span class="espace"></span>
+          <button type="button" class="btn-sobre" data-ep="annuler">Annuler</button>
+          <button type="submit" class="btn-or">${neuf ? "Ajouter l'épisode" : "Enregistrer"}</button>
+        </div>
+      </form>`;
+  }
+
+  function formLot() {
+    const saison = derniereSaison();
+    const debut = prochainEpisode(saison);
+    return `
+      <form class="form-episode" data-form-ep="lot" novalidate>
+        <p class="form-aide lot-aide">Ajoute d'un coup une série d'épisodes vus, sans note. Tu pourras les noter ensuite un par un. Les épisodes déjà présents sont ignorés.</p>
+        <div class="form-episode-grille lot">
+          <label class="form-champ" data-champ="saison"><span>Saison</span>
+            <input name="saison" type="number" inputmode="numeric" min="0" max="999" step="1" value="${saison}"></label>
+          <label class="form-champ" data-champ="debut"><span>Du épisode</span>
+            <input name="debut" type="number" inputmode="numeric" min="1" max="9999" step="1" value="${debut}"></label>
+          <label class="form-champ" data-champ="fin"><span>Au épisode</span>
+            <input name="fin" type="number" inputmode="numeric" min="1" max="9999" step="1" value="${debut + 9}"></label>
+          <label class="form-champ ep-date"><span>Vu le</span>
+            <input name="date_visionnage" type="date" max="2100-12-31" value=""></label>
+        </div>
+        <p class="form-erreur" data-erreur-ep></p>
+        <div class="form-episode-actions">
+          <span class="espace"></span>
+          <button type="button" class="btn-sobre" data-ep="annuler">Annuler</button>
+          <button type="submit" class="btn-or">Ajouter les épisodes</button>
+        </div>
+      </form>`;
+  }
+
+  /* ---------- Synchronisation avec la carte ---------- */
+  function synchroniserCarte() {
+    const c = EPI.contenu;
+    c.episodes = EPI.liste.map((e) => ({ saison: e.saison, episode: e.episode }));
+    const p = SEANCE.contenu.querySelector("[data-progression]");
+    const prog = progression(c);
+    if (p) { p.textContent = prog; p.hidden = !prog.startsWith("S"); }
+    afficher();
+  }
+
+  /* ---------- Actions ---------- */
+  function erreurEpisode(form, champs, message) {
+    form.querySelectorAll("[data-champ]").forEach((x) => x.classList.toggle("invalide", champs.includes(x.dataset.champ)));
+    form.querySelector("[data-erreur-ep]").textContent = message;
+    if (champs[0]) form.querySelector(`[name="${champs[0]}"]`).focus();
+  }
+  const entier = (form, nom) => {
+    const v = form.querySelector(`[name="${nom}"]`).value.trim();
+    return v === "" ? NaN : Number(v);
+  };
+
+  async function enregistrerEpisode(form) {
+    const cle = form.dataset.formEp;
+    const saison = entier(form, "saison");
+    const episode = entier(form, "episode");
+    if (!Number.isInteger(saison) || saison < 0 || saison > 999) return erreurEpisode(form, ["saison"], "Entre un numéro de saison entre 0 et 999 (0 pour les hors-série).");
+    if (!Number.isInteger(episode) || episode < 1 || episode > 9999) return erreurEpisode(form, ["episode"], "Entre un numéro d'épisode à partir de 1.");
+    const d = {
+      saison, episode,
+      titre: form.querySelector('[name="titre"]').value.trim() || null,
+      note: lireNote(form.querySelector(".etoiles-saisie")),
+      avis: form.querySelector('[name="avis"]').value.trim() || null,
+      date_visionnage: form.querySelector('[name="date_visionnage"]').value || null,
+    };
+    const bouton = form.querySelector('[type="submit"]');
+    bouton.disabled = true;
+    const req = cle === "nouveau"
+      ? sb.from("episodes").insert({ ...d, contenu_id: EPI.contenu.id })
+      : sb.from("episodes").update(d).eq("id", cle);
+    const { data, error } = await req.select("*").single();
+    bouton.disabled = false;
+    if (error) {
+      if (error.code === "23505") return erreurEpisode(form, ["saison", "episode"], `L'épisode ${episode} de la saison ${saison} existe déjà.`);
+      return erreurEpisode(form, [], "L'enregistrement a échoué. Réessaie.");
+    }
+    EPI.liste = cle === "nouveau" ? [...EPI.liste, data] : EPI.liste.map((e) => (e.id === data.id ? data : e));
+    trier();
+    EPI.edition = null;
+    EPI.ouvertes.add(data.saison);
+    rendreEpisodes();
+    synchroniserCarte();
+    toast(cle === "nouveau" ? `S${data.saison} · É${data.episode} ajouté.` : "Épisode mis à jour.");
+  }
+
+  async function enregistrerLot(form) {
+    const saison = entier(form, "saison");
+    const debut = entier(form, "debut");
+    const fin = entier(form, "fin");
+    if (!Number.isInteger(saison) || saison < 0 || saison > 999) return erreurEpisode(form, ["saison"], "Entre un numéro de saison entre 0 et 999.");
+    if (!Number.isInteger(debut) || debut < 1) return erreurEpisode(form, ["debut"], "Le premier épisode doit être au moins 1.");
+    if (!Number.isInteger(fin) || fin < debut) return erreurEpisode(form, ["fin"], "Le dernier épisode doit être supérieur ou égal au premier.");
+    if (fin - debut + 1 > 200) return erreurEpisode(form, ["fin"], "200 épisodes maximum à la fois.");
+    const date = form.querySelector('[name="date_visionnage"]').value || null;
+    const lignes = [];
+    for (let n = debut; n <= fin; n++) lignes.push({ contenu_id: EPI.contenu.id, saison, episode: n, date_visionnage: date });
+
+    const bouton = form.querySelector('[type="submit"]');
+    bouton.disabled = true;
+    const { data, error } = await sb.from("episodes")
+      .upsert(lignes, { onConflict: "contenu_id,saison,episode", ignoreDuplicates: true })
+      .select("*");
+    bouton.disabled = false;
+    if (error) return erreurEpisode(form, [], "L'ajout a échoué. Réessaie.");
+    const ajoutes = data || [];
+    EPI.liste = [...EPI.liste, ...ajoutes];
+    trier();
+    EPI.edition = null;
+    EPI.ouvertes.add(saison);
+    rendreEpisodes();
+    synchroniserCarte();
+    toast(ajoutes.length ? `${ajoutes.length} épisode${ajoutes.length > 1 ? "s" : ""} ajouté${ajoutes.length > 1 ? "s" : ""}.` : "Ces épisodes étaient déjà dans la liste.");
+  }
+
+  let minuteurSuppressionEp;
+  async function supprimerEpisode(bouton) {
+    if (!bouton.classList.contains("confirmer")) {
+      bouton.classList.add("confirmer");
+      bouton.innerHTML = `${ICONE_SUPPRIMER}Confirmer`;
+      clearTimeout(minuteurSuppressionEp);
+      minuteurSuppressionEp = setTimeout(() => {
+        if (document.contains(bouton)) { bouton.classList.remove("confirmer"); bouton.innerHTML = `${ICONE_SUPPRIMER}Supprimer`; }
+      }, 4000);
+      return;
+    }
+    clearTimeout(minuteurSuppressionEp);
+    bouton.disabled = true;
+    const id = bouton.dataset.id;
+    const { error } = await sb.from("episodes").delete().eq("id", id);
+    if (error) { bouton.disabled = false; toast("Suppression impossible. Réessaie."); return; }
+    EPI.liste = EPI.liste.filter((e) => e.id !== id);
+    EPI.edition = null;
+    rendreEpisodes();
+    synchroniserCarte();
+    toast("Épisode supprimé.");
+  }
+
+  async function appliquerMoyenne(bouton) {
+    const moy = moyenne(EPI.liste);
+    if (moy == null) return;
+    const note = Math.max(0.5, Math.round(moy * 2) / 2);
+    bouton.disabled = true;
+    const { data, error } = await sb.from("contenus").update({ note }).eq("id", EPI.contenu.id).select("*, episodes(saison, episode)").single();
+    bouton.disabled = false;
+    if (error) { toast("Mise à jour impossible. Réessaie."); return; }
+    etat.contenus = etat.contenus.map((x) => (x.id === data.id ? data : x));
+    afficher();
+    ouvrirFiche(data.id);
+    toast("Note globale mise à jour.");
+  }
+
+  SEANCE.contenu.addEventListener("click", (e) => {
+    if (SEANCE.mode !== "fiche" || !zoneEpisodes()) return;
+    const modif = e.target.closest("[data-ep-modifier]");
+    if (modif) { EPI.edition = modif.dataset.epModifier; return rendreEpisodes(); }
+    const a = e.target.closest("[data-ep]");
+    if (!a) return;
+    const action = a.dataset.ep;
+    if (action === "nouveau" || action === "lot") { EPI.edition = EPI.edition === action ? null : action; rendreEpisodes(); }
+    else if (action === "annuler") { EPI.edition = null; rendreEpisodes(); }
+    else if (action === "supprimer") supprimerEpisode(a);
+    else if (action === "moyenne") appliquerMoyenne(a);
+  });
+  SEANCE.contenu.addEventListener("submit", (e) => {
+    const form = e.target.closest("[data-form-ep]");
+    if (!form) return;
+    e.preventDefault();
+    if (form.dataset.formEp === "lot") enregistrerLot(form);
+    else enregistrerEpisode(form);
+  });
+  SEANCE.contenu.addEventListener("input", (e) => {
+    const form = e.target.closest("[data-form-ep]");
+    if (!form) return;
+    const champ = e.target.closest("[data-champ]");
+    if (champ) champ.classList.remove("invalide");
+    form.querySelector("[data-erreur-ep]").textContent = "";
+  });
+  SEANCE.contenu.addEventListener("toggle", (e) => {
+    const d = e.target;
+    if (!d.matches || !d.matches("details.saison")) return;
+    const s = Number(d.dataset.saison);
+    if (d.open) EPI.ouvertes.add(s); else EPI.ouvertes.delete(s);
+  }, true);
+  SEANCE.contenu.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-effacer-note]");
+    if (!b || !b.closest("[data-form-ep]")) return;
+    definirNote(b.closest(".choix-note").querySelector(".etoiles-saisie"), null);
+  });
 
   SEANCE.fermer.addEventListener("click", () => fermerSeance());
   SEANCE.contenu.addEventListener("click", (e) => {
