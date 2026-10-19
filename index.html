@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="casting.css">
+  <link rel="stylesheet" href="personnes.css">
 </head>
 <body class="rideaux-fermes">
 
@@ -60,6 +62,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           Ajouter
         </button>
+        <button id="btn-annuaire" class="btn-sobre" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.8-3.2 3-5 5.5-5s4.7 1.8 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.2c2.4.1 4.2 1.8 5 4.8"/></svg>
+          Annuaire
+        </button>
         <button id="btn-menu" class="btn-icone" type="button" aria-label="Options" aria-expanded="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>
         </button>
@@ -73,21 +79,43 @@
 
     <nav class="onglets" id="onglets" role="tablist" aria-label="Types de contenu"></nav>
 
-    <div class="filtres">
-      <select id="filtre-statut" aria-label="Filtrer par statut">
-        <option value="">Tous les statuts</option>
-        <option value="a_voir">À voir</option>
-        <option value="en_cours">En cours</option>
-        <option value="termine">Terminé</option>
-        <option value="abandonne">Abandonné</option>
-        <option value="incertain">Incertain</option>
-      </select>
-      <select id="tri" aria-label="Trier">
-        <option value="recent">Ajout récent</option>
-        <option value="visionnage">Date de visionnage</option>
-        <option value="note">Meilleure note</option>
-        <option value="titre">Titre (A → Z)</option>
-      </select>
+    <div class="filtres" id="filtres">
+      <button id="btn-filtres" class="btn-sobre filtres-bascule" type="button" aria-expanded="false" aria-controls="filtres-champs">
+        Filtres <span id="filtres-nb" class="filtres-nb" hidden>0</span>
+      </button>
+      <div id="filtres-champs" class="filtres-champs">
+        <select id="filtre-statut" aria-label="Filtrer par statut">
+          <option value="">Tous les statuts</option>
+          <option value="a_voir">À voir</option>
+          <option value="en_cours">En cours</option>
+          <option value="termine">Terminé</option>
+          <option value="abandonne">Abandonné</option>
+          <option value="incertain">Incertain</option>
+        </select>
+        <select id="filtre-genre" aria-label="Filtrer par genre">
+          <option value="">Tous les genres</option>
+        </select>
+        <select id="filtre-annee" aria-label="Filtrer par décennie">
+          <option value="">Toutes les années</option>
+        </select>
+        <select id="filtre-createur" aria-label="Filtrer par réalisateur, créateur ou chaîne">
+          <option value="">Tous les créateurs</option>
+        </select>
+        <input id="filtre-acteur" type="text" list="dl-acteurs" autocomplete="off" spellcheck="false" aria-label="Filtrer par acteur" placeholder="Chargement…" disabled>
+        <datalist id="dl-acteurs"></datalist>
+        <input id="filtre-producteur" type="text" list="dl-producteurs" autocomplete="off" spellcheck="false" aria-label="Filtrer par producteur" placeholder="Chargement…" disabled>
+        <datalist id="dl-producteurs"></datalist>
+        <select id="filtre-tag" aria-label="Filtrer par tag">
+          <option value="">Tous les tags</option>
+        </select>
+        <select id="tri" aria-label="Trier">
+          <option value="recent">Ajout récent</option>
+          <option value="visionnage">Date de visionnage</option>
+          <option value="note">Meilleure note</option>
+          <option value="titre">Titre (A → Z)</option>
+        </select>
+        <button id="btn-reinitialiser" class="filtres-reinit" type="button" hidden>Réinitialiser les filtres</button>
+      </div>
     </div>
 
     <section id="grille" class="grille" aria-live="polite"></section>
@@ -108,5 +136,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <script src="casting.js"></script>
+  <script src="personnes.js"></script>
 </body>
 </html>

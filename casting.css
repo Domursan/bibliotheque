@@ -1,0 +1,39 @@
+/* Casting et production dans la fiche */
+.casting { margin: 0 0 24px; display: grid; gap: 18px; }
+.casting[hidden] { display: none; }
+
+.casting-bloc { display: grid; gap: 8px; }
+.casting-titre {
+  margin: 0;
+  font-size: 11px; font-weight: 400;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--texte-3);
+}
+
+.casting-liste {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.casting-liste[hidden] { display: none; }
+
+.casting-puce {
+  font: inherit; font-size: 12px; line-height: 1.4;
+  padding: 2px 9px; border-radius: 999px;
+  background: #2a1b20; color: var(--texte-2);
+  border: 1px solid transparent; cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background-color .15s ease;
+}
+.casting-puce:hover { color: var(--or-clair); border-color: var(--or); background: var(--carte-hover); }
+.casting-puce:focus-visible,
+.casting-plus:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+
+.casting-plus {
+  justify-self: start;
+  font: inherit; font-size: 12px;
+  background: none; border: 0; padding: 2px 0;
+  color: var(--or); cursor: pointer; text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.casting-plus:hover { color: var(--or-clair); }
+
+.casting-etat { margin: 0; font-size: 13px; color: var(--texte-3); font-style: italic; }

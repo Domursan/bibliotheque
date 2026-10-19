@@ -14,6 +14,16 @@
     { id: "article", label: "Articles", seul: "Article" },
     { id: "video", label: "Vidéos", seul: "Vidéo" },
   ];
+  // Onglets : les 5 premiers filtrent par type, « À voir » et « Incertains » par statut (tous types).
+  const ONGLETS = [
+    { id: "tout", label: "Tout" },
+    { id: "film", label: "Films", type: "film" },
+    { id: "serie", label: "Séries", type: "serie" },
+    { id: "video", label: "Vidéos", type: "video" },
+    { id: "article", label: "Articles", type: "article" },
+    { id: "a_voir", label: "À voir", statut: "a_voir" },
+    { id: "incertain", label: "Incertains", statut: "incertain" },
+  ];
   const STATUTS = { a_voir: "À voir", en_cours: "En cours", termine: "Terminé", abandonne: "Abandonné", incertain: "Incertain" };
   const ICONES = {
     serie: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
@@ -29,12 +39,23 @@
     erreur: $("#erreur-connexion"), btnConnexion: $("#btn-connexion"), btnBascule: $("#btn-bascule"),
     app: $("#app"), onglets: $("#onglets"), grille: $("#grille"),
     recherche: $("#recherche"), statut: $("#filtre-statut"), tri: $("#tri"),
+    filtres: $("#filtres"), filtresChamps: $("#filtres-champs"), btnFiltres: $("#btn-filtres"), filtresNb: $("#filtres-nb"),
+    genre: $("#filtre-genre"), annee: $("#filtre-annee"), createur: $("#filtre-createur"), tag: $("#filtre-tag"),
+    acteur: $("#filtre-acteur"), producteur: $("#filtre-producteur"), dlActeurs: $("#dl-acteurs"), dlProducteurs: $("#dl-producteurs"),
+    reinitialiser: $("#btn-reinitialiser"),
     btnAjouter: $("#btn-ajouter"), btnMenu: $("#btn-menu"), menu: $("#menu"),
     menuUtilisateur: $("#menu-utilisateur"), btnAnimations: $("#btn-animations"), btnDeconnexion: $("#btn-deconnexion"),
     toast: $("#toast"),
   };
 
-  const etat = { contenus: [], type: "", modeInscription: false };
+  // contenu_id -> { acteurs: Set<nom>, producteurs: Set<nom> }, chargé en arrière-plan
+  const PARTICIPANTS = new Map();
+  const ongletMemorise = () => {
+    let id = null;
+    try { id = localStorage.getItem("biblio-onglet"); } catch { /* ignoré */ }
+    return ONGLETS.some((o) => o.id === id) ? id : "tout";
+  };
+  const etat = { contenus: [], modeInscription: false, participations: "chargement", onglet: ongletMemorise() };
 
   /* ---------- Préférences d'animation ---------- */
   const lirePref = () => { try { return localStorage.getItem("biblio-animations"); } catch { return null; } };
@@ -158,6 +179,7 @@
     }
     etat.contenus = tout;
     afficher();
+    chargerParticipations();
   }
 
   /* ---------- Affichage ---------- */
@@ -225,30 +247,190 @@
     return d;
   }
 
-  function afficherOnglets() {
-    const compte = (id) => etat.contenus.filter((c) => !id || c.type === id).length;
+  /* ---------- Onglets et filtres ---------- */
+  const ongletCourant = () => ONGLETS.find((o) => o.id === etat.onglet) || ONGLETS[0];
+  const dansOnglet = (o, c) => (o.type ? c.type === o.type : o.statut ? c.statut === o.statut : true);
+  const compteOnglet = (o) => etat.contenus.filter((c) => dansOnglet(o, c)).length;
+  const minuscules = (s) => (s || "").trim().toLowerCase();
+  const genresDe = (c) => (c.genre || "").split(",").map((g) => g.trim()).filter(Boolean);
+  const decennie = (annee) => (annee ? Math.floor(annee / 10) * 10 : null);
+  const nomsDe = (c, role) => { const p = PARTICIPANTS.get(c.id); return p ? [...p[role]] : []; };
+  const triAlpha = (a, b) => a.localeCompare(b, "fr", { sensitivity: "base" });
+  const dansRecherche = (c, q) =>
+    [c.titre, c.createur, c.genre, ...(c.tags || []), ...nomsDe(c, "acteurs"), ...nomsDe(c, "producteurs")]
+      .some((v) => v && v.toLowerCase().includes(q));
+
+  function construireOnglets() {
     el.onglets.innerHTML = "";
-    TYPES.forEach((t) => {
+    ONGLETS.forEach((o, i) => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "onglet";
+      b.dataset.onglet = o.id;
       b.setAttribute("role", "tab");
-      b.setAttribute("aria-selected", String(etat.type === t.id));
-      b.innerHTML = `${t.label}<span>${compte(t.id)}</span>`;
-      b.addEventListener("click", () => { etat.type = t.id; afficher(); });
+      b.setAttribute("aria-controls", "grille");
+      b.innerHTML = `${o.label}<span></span>`;
+      b.addEventListener("click", () => changerOnglet(o.id));
+      b.addEventListener("keydown", (e) => {
+        const cible = { ArrowRight: (i + 1) % ONGLETS.length, ArrowLeft: (i - 1 + ONGLETS.length) % ONGLETS.length, Home: 0, End: ONGLETS.length - 1 }[e.key];
+        if (cible === undefined) return;
+        e.preventDefault();
+        changerOnglet(ONGLETS[cible].id);
+        el.onglets.querySelector(`[data-onglet="${ONGLETS[cible].id}"]`).focus();
+      });
       el.onglets.append(b);
+    });
+    afficherOnglets();
+  }
+
+  function afficherOnglets() {
+    el.onglets.querySelectorAll(".onglet").forEach((b) => {
+      const o = ONGLETS.find((x) => x.id === b.dataset.onglet);
+      const actif = o.id === etat.onglet;
+      b.setAttribute("aria-selected", String(actif));
+      b.tabIndex = actif ? 0 : -1;
+      b.querySelector("span").textContent = compteOnglet(o);
     });
   }
 
+  function changerOnglet(id) {
+    if (etat.onglet === id) return;
+    etat.onglet = id;
+    try { localStorage.setItem("biblio-onglet", id); } catch { /* ignoré */ }
+    afficher();
+  }
+
+  // Valeurs des listes déroulantes : celles présentes dans l'onglet courant.
+  // La valeur déjà choisie reste toujours proposée, pour qu'un filtre actif ne disparaisse pas en silence.
+  function remplirOptions(parent, items) {
+    const sig = items.map((i) => `${i.v}\u0001${i.t}`).join("\u0002");
+    if (parent.dataset.sig === sig) return;
+    parent.dataset.sig = sig;
+    const frag = document.createDocumentFragment();
+    items.forEach(({ v, t }) => {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = t;
+      frag.append(o);
+    });
+    parent.replaceChildren(frag);
+  }
+  function remplirSelect(select, placeholder, items) {
+    const courant = select.value;
+    if (courant && !items.some((i) => i.v === courant)) items = [...items, { v: courant, t: courant }];
+    remplirOptions(select, [{ v: "", t: placeholder }, ...items]);
+    select.value = courant;
+  }
+  function remplirListes(o) {
+    const base = etat.contenus.filter((c) => dansOnglet(o, c));
+    const valeurs = (extraire) => {
+      const s = new Set();
+      base.forEach((c) => extraire(c).forEach((v) => s.add(v)));
+      return [...s].sort(triAlpha).map((v) => ({ v, t: v }));
+    };
+    const decennies = [...new Set(base.map((c) => decennie(c.annee)).filter((d) => d !== null))].sort((a, b) => b - a);
+    remplirSelect(el.genre, "Tous les genres", valeurs(genresDe));
+    remplirSelect(el.annee, "Toutes les années", decennies.map((d) => ({ v: String(d), t: `${d}–${d + 9}` })));
+    remplirSelect(el.createur, "Tous les créateurs", valeurs((c) => (c.createur ? [c.createur] : [])));
+    remplirSelect(el.tag, "Tous les tags", valeurs((c) => c.tags || []));
+    const noms = (role) => valeurs((c) => nomsDe(c, role)).map((i) => i.v);
+    remplirOptions(el.dlActeurs, noms("acteurs").map((v) => ({ v, t: "" })));
+    remplirOptions(el.dlProducteurs, noms("producteurs").map((v) => ({ v, t: "" })));
+  }
+
+  function lireFiltres(o) {
+    return {
+      statut: o.statut ? "" : el.statut.value, // masqué sur « À voir » et « Incertains »
+      genre: el.genre.value,
+      annee: el.annee.value,
+      createur: el.createur.value,
+      tag: el.tag.value,
+      acteur: minuscules(el.acteur.value),
+      producteur: minuscules(el.producteur.value),
+    };
+  }
+
+  function correspond(c, f) {
+    return (!f.statut || c.statut === f.statut) &&
+      (!f.genre || genresDe(c).includes(f.genre)) &&
+      (!f.annee || decennie(c.annee) === Number(f.annee)) &&
+      (!f.createur || c.createur === f.createur) &&
+      (!f.tag || (c.tags || []).includes(f.tag)) &&
+      (!f.acteur || nomsDe(c, "acteurs").some((n) => n.toLowerCase().includes(f.acteur))) &&
+      (!f.producteur || nomsDe(c, "producteurs").some((n) => n.toLowerCase().includes(f.producteur)));
+  }
+
+  function reinitialiser() {
+    [el.statut, el.genre, el.annee, el.createur, el.tag, el.acteur, el.producteur].forEach((c) => { c.value = ""; });
+    afficher();
+    (el.statut.hidden ? el.genre : el.statut).focus();
+  }
+
+  function basculerFiltres(ouvrir = !el.filtres.classList.contains("ouvert")) {
+    el.filtres.classList.toggle("ouvert", ouvrir);
+    el.btnFiltres.setAttribute("aria-expanded", String(ouvrir));
+  }
+
+  // Participations (acteurs, producteurs) : chargées en arrière-plan, par pages de 1000.
+  function etatParticipations(statut) {
+    etat.participations = statut;
+    const pret = statut === "pret";
+    const texte = statut === "echec" ? "Indisponible" : "Chargement…";
+    [el.acteur, el.producteur].forEach((i) => { i.disabled = !pret; });
+    el.acteur.placeholder = pret ? "Nom d'acteur" : texte;
+    el.producteur.placeholder = pret ? "Nom de producteur" : texte;
+    afficher();
+  }
+
+  async function chargerParticipations() {
+    etatParticipations("chargement");
+    const PAGE = 1000;
+    const lignes = [];
+    try {
+      for (let debut = 0; ; debut += PAGE) {
+        const { data, error } = await sb
+          .from("participations")
+          .select("role, contenu_id, personne_id, personnes(nom)")
+          .not("contenu_id", "is", null)
+          .order("personne_id", { ascending: true })
+          .order("role", { ascending: true })
+          .order("oeuvre_qid", { ascending: true })
+          .range(debut, debut + PAGE - 1);
+        if (error) throw error;
+        lignes.push(...(data || []));
+        if (!data || data.length < PAGE) break;
+      }
+    } catch {
+      etatParticipations("echec");
+      return;
+    }
+    PARTICIPANTS.clear();
+    lignes.forEach((l) => {
+      const role = l.role === "acteur" ? "acteurs" : l.role === "producteur" ? "producteurs" : null;
+      const nom = Array.isArray(l.personnes) ? l.personnes[0]?.nom : l.personnes?.nom;
+      if (!role || !nom) return;
+      let p = PARTICIPANTS.get(l.contenu_id);
+      if (!p) PARTICIPANTS.set(l.contenu_id, (p = { acteurs: new Set(), producteurs: new Set() }));
+      p[role].add(nom);
+    });
+    etatParticipations("pret");
+  }
+
   function afficher() {
+    const o = ongletCourant();
+    if (o.statut) el.statut.value = "";
+    el.statut.hidden = Boolean(o.statut);
     afficherOnglets();
+    remplirListes(o);
+
+    const f = lireFiltres(o);
+    const nb = Object.values(f).filter(Boolean).length;
+    el.filtresNb.textContent = nb;
+    el.filtresNb.hidden = nb === 0;
+    el.reinitialiser.hidden = nb === 0;
+
     const q = el.recherche.value.trim().toLowerCase();
-    const statut = el.statut.value;
-    let liste = etat.contenus.filter((c) =>
-      (!etat.type || c.type === etat.type) &&
-      (!statut || c.statut === statut) &&
-      (!q || [c.titre, c.createur, c.genre, ...(c.tags || [])].some((v) => v && v.toLowerCase().includes(q)))
-    );
+    const liste = etat.contenus.filter((c) => dansOnglet(o, c) && correspond(c, f) && (!q || dansRecherche(c, q)));
 
     const tri = el.tri.value;
     const parDate = (k) => (a, b) => (b[k] || "").localeCompare(a[k] || "");
@@ -372,6 +554,7 @@
           <dl class="fiche-infos">
             ${infos.map(([k, v, html]) => `<div><dt>${k}</dt><dd>${html ? v : echapper(v)}</dd></div>`).join("")}
           </dl>
+          <section class="casting" data-casting aria-label="Casting et production"></section>
           <div class="fiche-actions">
             <button class="btn-or" type="button" data-action="modifier">${ICONE_MODIFIER}Modifier</button>
             <button class="btn-sobre btn-danger" type="button" data-action="supprimer">${ICONE_SUPPRIMER}Supprimer</button>
@@ -382,6 +565,9 @@
     ouvrirSeance();
     SEANCE.contenu.querySelector('[data-action="modifier"]').focus({ preventScroll: true });
     if (c.type === "serie") chargerEpisodes(c);
+    // Casting et production (casting.js)
+    const zoneCasting = SEANCE.contenu.querySelector("[data-casting]");
+    if (window.Casting && zoneCasting) window.Casting.afficher(c, zoneCasting);
   }
 
   let minuteurSuppression;
@@ -409,7 +595,7 @@
   /* ---------- Formulaire ---------- */
   function ouvrirFormulaire(c) {
     const neuf = !c;
-    const typeDefaut = etat.type || "film";
+    const typeDefaut = ongletCourant().type || "film";
     const v = c || { type: typeDefaut, statut: "termine", date_visionnage: aujourdhui(), nb_visionnages: 1, note: null, tags: [] };
     SEANCE.mode = "formulaire";
     SEANCE.fiche = c || null;
@@ -1033,6 +1219,7 @@
   appliquerAnimations();
   placerFauteuils();
   window.addEventListener("resize", placerFauteuils);
+  construireOnglets();
 
   el.form.addEventListener("submit", soumettre);
   el.btnBascule.addEventListener("click", basculerMode);
@@ -1040,6 +1227,15 @@
   el.recherche.addEventListener("input", afficher);
   el.statut.addEventListener("change", afficher);
   el.tri.addEventListener("change", afficher);
+  [el.genre, el.annee, el.createur, el.tag].forEach((s) => s.addEventListener("change", afficher));
+  [el.acteur, el.producteur].forEach((i) => i.addEventListener("input", afficher));
+  el.reinitialiser.addEventListener("click", reinitialiser);
+  el.btnFiltres.addEventListener("click", () => basculerFiltres());
+  el.filtresChamps.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !el.filtres.classList.contains("ouvert")) return;
+    basculerFiltres(false);
+    el.btnFiltres.focus();
+  });
   el.btnAjouter.addEventListener("click", ajouter);
   el.grille.addEventListener("click", (e) => { const c = e.target.closest(".carte"); if (c) ouvrirFiche(c.dataset.id); });
   el.btnMenu.addEventListener("click", (e) => { e.stopPropagation(); basculerMenu(); });
@@ -1051,6 +1247,19 @@
   });
   el.btnAnimations.addEventListener("click", () => { ecrirePref(animationsActives() ? "non" : "oui"); appliquerAnimations(); });
   el.btnDeconnexion.addEventListener("click", async () => { basculerMenu(false); await sb.auth.signOut(); });
+
+  /* ---------- Pont pour les modules (casting.js, personnes.js) ---------- */
+  window.BIB = {
+    sb,
+    echapper,
+    toast,
+    ICONES,
+    get contenus() { return etat.contenus; },
+    ouvrirFiche,          // ouvrirFiche(idContenu) : ouvre la fiche d'une œuvre de la bibliothèque
+    fermerSeance,
+  };
+  el.btnAnnuaire = $("#btn-annuaire");
+  if (el.btnAnnuaire) el.btnAnnuaire.addEventListener("click", () => { if (window.Personnes) window.Personnes.ouvrirAnnuaire(); });
 
   sb.auth.onAuthStateChange((_evt, session) => { setTimeout(() => surSession(session), 0); });
   sb.auth.getSession().then(({ data }) => {

@@ -225,10 +225,11 @@ body.projection .ecran { opacity: 1; transform: none; }
 .onglets { display: flex; gap: 24px; border-bottom: 1px solid var(--trait-doux); margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; }
 .onglets::-webkit-scrollbar { display: none; }
 .onglet {
-  position: relative; padding: 0 0 11px; background: none; border: 0;
+  position: relative; flex-shrink: 0; padding: 0 0 11px; background: none; border: 0;
   color: var(--texte-3); font-size: 14px; cursor: pointer; white-space: nowrap;
   transition: color .2s;
 }
+.onglet:focus-visible { outline: 2px solid var(--or); outline-offset: 4px; border-radius: 4px; }
 .onglet span { margin-left: 4px; font-size: 12px; color: var(--texte-3); }
 .onglet:hover { color: var(--texte-2); }
 .onglet[aria-selected="true"] { color: var(--creme); }
@@ -237,7 +238,16 @@ body.projection .ecran { opacity: 1; transform: none; }
   background: var(--or); border-radius: 2px;
 }
 
-.filtres { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.filtres { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.filtres-champs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
+.filtres input {
+  height: 34px; width: 170px; min-width: 0; padding: 0 12px;
+  background: var(--carte); border: 1px solid var(--trait); border-radius: 999px;
+  font-size: 13px; color: var(--texte-2);
+}
+.filtres input::placeholder { color: var(--texte-3); }
+.filtres input:focus { outline: none; border-color: var(--or); }
+.filtres input:disabled { opacity: .6; cursor: progress; }
 .filtres select {
   height: 34px; padding: 0 32px 0 12px;
   background: var(--carte) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%237a625e' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 10px center / 14px;
@@ -246,6 +256,29 @@ body.projection .ecran { opacity: 1; transform: none; }
   appearance: none; cursor: pointer;
 }
 .filtres select:focus { outline: none; border-color: var(--or); }
+.filtres button:focus-visible, .filtres select:focus-visible, .filtres input:focus-visible {
+  outline: 2px solid var(--or); outline-offset: 2px;
+}
+.filtres .filtres-bascule { display: none; }
+.filtres-nb {
+  display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px;
+  border-radius: 999px; background: var(--or); color: var(--noir); font-size: 11px; font-weight: 600;
+}
+.filtres-nb[hidden] { display: none; }
+.filtres-reinit {
+  height: 34px; padding: 0 12px; background: none; border: 0;
+  color: var(--or-clair); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+
+/* Filtres repliables sur téléphone */
+@media (max-width: 720px) {
+  .onglets { gap: 20px; }
+  .filtres .filtres-bascule { display: inline-flex; align-items: center; height: 34px; padding: 0 14px; }
+  .filtres-champs { display: none; }
+  .filtres.ouvert .filtres-champs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .filtres.ouvert .filtres-champs > * { width: 100%; }
+  .filtres.ouvert .filtres-reinit { grid-column: 1 / -1; justify-self: start; }
+}
 
 /* ---------- Cartes ---------- */
 .grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
