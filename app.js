@@ -23,6 +23,7 @@
     { id: "article", label: "Articles", type: "article" },
     { id: "a_voir", label: "À voir", statut: "a_voir" },
     { id: "incertain", label: "Incertains", statut: "incertain" },
+    { id: "catalogue", label: "Catalogue", catalogue: true }, // géré par catalogue.js
   ];
   const STATUTS = { a_voir: "À voir", en_cours: "En cours", termine: "Terminé", abandonne: "Abandonné", incertain: "Incertain" };
   const ICONES = {
@@ -249,8 +250,10 @@
 
   /* ---------- Onglets et filtres ---------- */
   const ongletCourant = () => ONGLETS.find((o) => o.id === etat.onglet) || ONGLETS[0];
-  const dansOnglet = (o, c) => (o.type ? c.type === o.type : o.statut ? c.statut === o.statut : true);
-  const compteOnglet = (o) => etat.contenus.filter((c) => dansOnglet(o, c)).length;
+  const dansOnglet = (o, c) => (o.catalogue ? false : o.type ? c.type === o.type : o.statut ? c.statut === o.statut : true);
+  const compteOnglet = (o) => (o.catalogue
+    ? (window.Catalogue && window.Catalogue.total != null ? window.Catalogue.total : "")
+    : etat.contenus.filter((c) => dansOnglet(o, c)).length);
   const minuscules = (s) => (s || "").trim().toLowerCase();
   const genresDe = (c) => (c.genre || "").split(",").map((g) => g.trim()).filter(Boolean);
   const decennie = (annee) => (annee ? Math.floor(annee / 10) * 10 : null);
@@ -418,6 +421,13 @@
 
   function afficher() {
     const o = ongletCourant();
+    // Onglet Catalogue : affichage délégué à catalogue.js
+    el.filtres.hidden = Boolean(o.catalogue);
+    if (o.catalogue) {
+      afficherOnglets();
+      if (window.Catalogue) window.Catalogue.afficher(el.grille, el.recherche.value.trim());
+      return;
+    }
     if (o.statut) el.statut.value = "";
     el.statut.hidden = Boolean(o.statut);
     afficherOnglets();
@@ -1256,6 +1266,8 @@
     ICONES,
     get contenus() { return etat.contenus; },
     ouvrirFiche,          // ouvrirFiche(idContenu) : ouvre la fiche d'une œuvre de la bibliothèque
+    recharger: chargerContenus, // recharge toutes les fiches (après un ajout depuis le catalogue)
+    rafraichirOnglets: () => afficherOnglets(),
     fermerSeance,
   };
   el.btnAnnuaire = $("#btn-annuaire");

@@ -1,0 +1,84 @@
+/* =========================================================
+   Catalogue : barre de filtres, cartes et fiche en overlay
+   S'appuie sur les variables de style.css (:root) et sur les
+   cartes (.carte, .affiche, .carte-corps) et la fiche (.fiche).
+   ========================================================= */
+
+/* ---------- Barre de filtres (pleine largeur de la grille) ---------- */
+.catalogue-barre { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+.catalogue-champs { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 8px; }
+.catalogue-champ { display: flex; flex-direction: column; gap: 4px; flex: 1 1 170px; max-width: 240px; min-width: 0; }
+.catalogue-champ > span {
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--texte-3);
+}
+.catalogue-champ input, .catalogue-champ select {
+  height: 36px; width: 100%; min-width: 0; padding: 0 12px;
+  background: var(--carte); border: 1px solid var(--trait); border-radius: 999px;
+  font-size: 13px; color: var(--texte-2);
+}
+.catalogue-champ input::placeholder { color: var(--texte-3); }
+.catalogue-champ input:disabled { opacity: .6; cursor: progress; }
+.catalogue-champ select {
+  padding-right: 32px; cursor: pointer; appearance: none;
+  background: var(--carte) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%237a625e' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 10px center / 14px;
+}
+.catalogue-champ input:focus, .catalogue-champ select:focus { outline: none; border-color: var(--or); }
+.catalogue-champ input:focus-visible, .catalogue-champ select:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+.catalogue-compte { margin: 0; min-height: 1.5em; font-size: 13px; color: var(--texte-3); }
+
+.catalogue-pied { grid-column: 1 / -1; display: flex; justify-content: center; padding: 8px 0 16px; }
+.catalogue-pied[hidden] { display: none; }
+.catalogue-pied button:disabled { opacity: .6; cursor: wait; }
+
+/* ---------- Cartes du catalogue ---------- */
+.carte-personnes { margin: 4px 0 0; font-size: 12px; color: var(--texte-2); }
+
+/* ---------- Fiche en overlay (au-dessus de la séance) ---------- */
+body.catalogue-ouvert { overflow: hidden; }
+
+.catalogue-fiche {
+  position: fixed; inset: 0; z-index: 46;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(11, 6, 7, .72); backdrop-filter: blur(3px);
+  opacity: 0; transition: opacity .35s ease;
+}
+.catalogue-fiche[hidden] { display: none; }
+.catalogue-fiche.visible { opacity: 1; }
+
+.catalogue-panneau {
+  position: relative; width: 100%; max-width: 940px; max-height: 100%;
+  overflow-y: auto; overscroll-behavior: contain;
+  background: var(--ecran); border: 1px solid var(--trait); border-radius: 18px;
+  box-shadow: 0 0 80px rgba(255, 232, 196, .06), 0 30px 80px rgba(0, 0, 0, .7);
+  padding: 32px 36px;
+  transform: scale(.97); transition: transform .35s ease;
+}
+.catalogue-fiche.visible .catalogue-panneau { transform: none; }
+
+.catalogue-fermer { position: sticky; top: 0; float: right; margin: -12px -16px 0 12px; z-index: 2; }
+.catalogue-fermer svg { fill: none; stroke: var(--creme); stroke-width: 2; stroke-linecap: round; }
+.catalogue-fiche .fiche-titre:focus { outline: none; }
+.catalogue-chargement { text-align: center; color: var(--texte-2); font-size: 14px; padding: 40px 0; }
+.catalogue-fiche-corps .erreur { color: var(--danger); font-size: 14px; }
+
+.catalogue-bloc { margin: 0 0 22px; }
+.catalogue-bloc-titre {
+  margin: 0 0 10px; font-weight: 400;
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--texte-3);
+}
+.catalogue-puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.catalogue-puce {
+  padding: 4px 11px; border-radius: 999px; font-size: 12px; cursor: pointer;
+  background: var(--carte); border: 1px solid var(--trait); color: var(--texte-2);
+  transition: color .2s, border-color .2s, background .2s;
+}
+.catalogue-puce:hover { color: var(--or-clair); border-color: var(--or); background: var(--carte-hover); }
+.catalogue-puce:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+
+/* ---------- Mobile (375 px) ---------- */
+@media (max-width: 720px) {
+  .catalogue-champ { flex: 1 1 100%; max-width: none; }
+  .catalogue-fiche { padding: 8px; }
+  .catalogue-panneau { padding: 22px 18px; border-radius: 14px; }
+}

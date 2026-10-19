@@ -337,15 +337,22 @@
     </button></li>`;
   }
 
+  // Le catalogue (module Catalogue) est-il disponible pour ouvrir une fiche ?
+  const catalogueDispo = () => !!(window.Catalogue && typeof window.Catalogue.ouvrirFiche === "function");
+
   // Œuvre pas encore dans la bibliothèque : titre, année, lien Wikidata.
+  // Si le catalogue est disponible, la ligne devient un bouton qui ouvre sa fiche.
   function ligneAutre(o) {
     const infos = [rolesTexte(o.roles), o.annee != null ? String(o.annee) : ""].filter(Boolean).map(esc).join(" · ");
-    return `<li class="annuaire-autre">
-      <span class="annuaire-film-corps">
+    const corps = `<span class="annuaire-film-corps">
         <span class="annuaire-film-titre">${esc(o.titre || "Sans titre")}</span>
         ${infos ? `<span class="annuaire-film-meta">${infos}</span>` : ""}
-      </span>
-      <a class="annuaire-wd" href="${esc(wikidata(o.oeuvre_qid))}" target="_blank" rel="noopener">Wikidata ↗</a>
+      </span>`;
+    const lien = `<a class="annuaire-wd" href="${esc(wikidata(o.oeuvre_qid))}" target="_blank" rel="noopener">Wikidata ↗</a>`;
+    if (!catalogueDispo()) return `<li class="annuaire-autre">${corps}${lien}</li>`;
+    return `<li class="annuaire-autre annuaire-autre-cliquable">
+      <button type="button" class="annuaire-autre-bouton" data-oeuvre="${esc(o.oeuvre_qid)}">${corps}</button>
+      ${lien}
     </li>`;
   }
 
@@ -406,10 +413,21 @@
     BIB.ouvrirFiche(id);
   }
 
+  // Ouvre la fiche catalogue d'une œuvre « Pas encore vu » : ferme l'annuaire d'abord.
+  function ouvrirOeuvreCatalogue(qid) {
+    if (!catalogueDispo() || !qid) return;
+    fermer();
+    window.Catalogue.ouvrirFiche(qid);
+  }
+
   function surClic(e) {
     const t = e.target;
+    // Le lien Wikidata reste un simple lien : il ne doit pas déclencher le clic de la ligne.
+    if (t.closest(".annuaire-wd")) { e.stopPropagation(); return; }
     const ligne = t.closest("[data-qid]");
     if (ligne && etat.vue === "liste") { ouvrirPersonne(ligne.dataset.qid); return; }
+    const oeuvre = t.closest("[data-oeuvre]");
+    if (oeuvre && etat.vue === "personne") { ouvrirOeuvreCatalogue(oeuvre.dataset.oeuvre); return; }
     const film = t.closest("[data-contenu]");
     if (film) { ouvrirFicheBibliotheque(film.dataset.contenu); return; }
     const action = t.closest("[data-action]");
@@ -441,5 +459,12 @@
 
   document.addEventListener("keydown", surTouche, true);
 
-  window.Personnes = { ouvrirAnnuaire, ouvrirPersonne };
+  // Vide les caches (liste des personnes, filmographies) : la prochaine ouverture recharge depuis la base.
+  function invaliderCache() {
+    etat.base = null;
+    etat.basePromesse = null;
+    etat.filmos.clear();
+  }
+
+  window.Personnes = { ouvrirAnnuaire, ouvrirPersonne, invaliderCache };
 })();
