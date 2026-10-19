@@ -186,7 +186,6 @@
             <option value="">Tout</option>
             <option value="film">Films</option>
             <option value="serie">Séries</option>
-            <option value="autre">Autres</option>
           </select>
         </label>
         <label class="catalogue-champ">
