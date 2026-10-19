@@ -499,7 +499,7 @@
     afficher();
     toast("Marqué comme vu");
     if (SEANCE.ouverte && SEANCE.mode === "fiche" && SEANCE.fiche && SEANCE.fiche.id === id) ouvrirFiche(id);
-    ouvrirNotation(data);
+    // Pas de boîte de notation automatique : la note se met depuis la fiche (« Modifier »).
   }
 
   let notation = null; // { fond, focusAvant, surTouche } quand la boîte est ouverte

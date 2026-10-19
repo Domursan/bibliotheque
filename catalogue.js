@@ -679,7 +679,7 @@
     BIB.toast(vu ? "Marqué comme vu" : "Ajouté à ta liste À voir");
     if (window.Personnes && window.Personnes.invaliderCache) window.Personnes.invaliderCache();
     await BIB.recharger();   // recharge la bibliothèque ; app.js rappelle Catalogue.afficher()
-    if (vu) BIB.noterRapide(nouvelId); // boîte de notation, sur la fiche fraîchement rechargée
+
   }
 
   /* ---------- Pont ---------- */
