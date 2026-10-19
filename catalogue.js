@@ -702,6 +702,12 @@
 
   window.Catalogue = {
     afficher,
+    // passerDansBibliotheque(ligneCatalogue, champs) → id du contenu créé ou null (utilisé par swipe.js)
+    passerDansBibliotheque: async (ligne, champs) => {
+      const id = await passerDansBibliotheque(ligne, champs);
+      if (id && etat.total != null) { etat.total = Math.max(0, etat.total - 1); BIB.rafraichirOnglets(); }
+      return id;
+    },
     ouvrirFiche,
     get total() { return etat.total; },
   };

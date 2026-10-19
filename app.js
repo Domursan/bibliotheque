@@ -1391,11 +1391,21 @@
     ouvrirFiche,          // ouvrirFiche(idContenu) : ouvre la fiche d'une œuvre de la bibliothèque
     recharger: () => chargerContenus({ silencieux: true }), // recharge les fiches sans remonter en haut de page
     rafraichirOnglets: () => afficherOnglets(),
+    // majContenu(id, champs) → met à jour une fiche (ex. { statut: "a_voir" }), rafraîchit la liste ; renvoie true/false
+    majContenu: async (id, champs) => {
+      const { data, error } = await sb.from("contenus").update(champs).eq("id", id).select("*, episodes(saison, episode)").single();
+      if (error) return false;
+      etat.contenus = etat.contenus.map((x) => (x.id === data.id ? data : x));
+      afficher();
+      return true;
+    },
     fermerSeance,
     aujourdhui,
     // noterRapide(idContenu) : ouvre la boîte de notation pour une fiche déjà chargée (après recharger()).
     noterRapide: (id) => { const c = etat.contenus.find((x) => x.id === id); if (c) ouvrirNotation(c); },
   };
+  el.btnSwipe = $("#btn-swipe");
+  if (el.btnSwipe) el.btnSwipe.addEventListener("click", () => { if (window.Swipe) window.Swipe.ouvrir(); });
   el.btnAnnuaire = $("#btn-annuaire");
   if (el.btnAnnuaire) el.btnAnnuaire.addEventListener("click", () => { if (window.Personnes) window.Personnes.ouvrirAnnuaire(); });
 
