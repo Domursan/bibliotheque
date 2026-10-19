@@ -82,3 +82,9 @@ body.catalogue-ouvert { overflow: hidden; }
   .catalogue-fiche { padding: 8px; }
   .catalogue-panneau { padding: 22px 18px; border-radius: 14px; }
 }
+
+/* Cellule de carte du catalogue : la carte + le bouton « ✓ Vu » posé dessus */
+.catalogue-cellule { position: relative; display: flex; }
+.catalogue-cellule > .carte { flex: 1; width: 100%; text-align: left; }
+.catalogue-cellule:hover > .carte-vu, .catalogue-cellule:focus-within > .carte-vu { opacity: 1; }
+.catalogue-cellule > .carte-vu { top: 44px; bottom: auto; }

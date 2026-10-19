@@ -278,9 +278,11 @@
     const type = typeDe(c);
     const icone = iconeDe(type);
     const nb = c.nb_personnes || 0;
+    const cellule = document.createElement("div");
+    cellule.className = "catalogue-item catalogue-cellule";
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "carte catalogue-item";
+    b.className = "carte";
     b.dataset.qid = c.qid;
     b.dataset.type = type;
     b.style.animationDelay = `${Math.min(i % PAR_PAGE, 12) * 40}ms`;
@@ -305,7 +307,15 @@
       }, { once: true });
     }
     b.addEventListener("click", () => ouvrirFiche(c.qid));
-    return b;
+    // Bouton « ✓ Vu » : ajoute directement l'œuvre comme vue, sans ouvrir la fiche.
+    const vu = document.createElement("button");
+    vu.type = "button";
+    vu.className = "carte-vu";
+    vu.textContent = "✓ Vu";
+    vu.setAttribute("aria-label", `Marquer « ${c.titre} » comme vu`);
+    vu.addEventListener("click", (e) => { e.stopPropagation(); ajouter(vu, { vu: true, ligne: c }); });
+    cellule.append(b, vu);
+    return cellule;
   }
 
   function rendreCartes(debut, fin) {
@@ -646,9 +656,9 @@
   }
 
   // Un seul chemin pour « Ajouter à ma bibliothèque » (À voir) et « Je l'ai vu » (terminé + notation).
-  async function ajouter(bouton, { vu = false } = {}) {
+  async function ajouter(bouton, { vu = false, ligne = null } = {}) {
     const F = etat.fiche;
-    const c = F && F.ligne;
+    const c = ligne || (F && F.ligne);
     if (!c || bouton.disabled) return;
     bouton.disabled = true;
     const champs = vu
@@ -663,9 +673,9 @@
 
     if (etat.total != null) etat.total = Math.max(0, etat.total - 1);
     BIB.rafraichirOnglets();
-    fermerFiche();
+    if (!ligne) fermerFiche();
     const carte = etat.grille && etat.grille.querySelector(`.carte[data-qid="${CSS.escape(c.qid)}"]`);
-    if (carte) carte.remove();
+    if (carte) (carte.closest(".catalogue-cellule") || carte).remove();
     BIB.toast(vu ? "Marqué comme vu" : "Ajouté à ta liste À voir");
     if (window.Personnes && window.Personnes.invaliderCache) window.Personnes.invaliderCache();
     await BIB.recharger();   // recharge la bibliothèque ; app.js rappelle Catalogue.afficher()

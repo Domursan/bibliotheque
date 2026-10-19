@@ -158,8 +158,9 @@
   }
 
   /* ---------- Données ---------- */
-  async function chargerContenus() {
-    el.grille.innerHTML = '<div class="squelette"></div>'.repeat(6);
+  async function chargerContenus({ silencieux = false } = {}) {
+    // En rechargement silencieux (après une action), on garde l'affichage et la position de défilement.
+    if (!silencieux || !etat.contenus.length) el.grille.innerHTML = '<div class="squelette"></div>'.repeat(6);
     // Supabase renvoie au maximum 1000 lignes par requête : on charge par pages.
     const PAGE = 1000;
     const tout = [];
@@ -426,6 +427,13 @@
   }
 
   function afficher() {
+    // Garde la position de défilement : reconstruire la grille ne doit pas faire remonter la page.
+    const defilement = window.scrollY;
+    afficherSansDefiler();
+    if (Math.abs(window.scrollY - defilement) > 1) window.scrollTo(0, defilement);
+  }
+
+  function afficherSansDefiler() {
     const o = ongletCourant();
     // Onglet Catalogue : affichage délégué à catalogue.js
     el.filtres.hidden = Boolean(o.catalogue);
@@ -1381,7 +1389,7 @@
     ICONES,
     get contenus() { return etat.contenus; },
     ouvrirFiche,          // ouvrirFiche(idContenu) : ouvre la fiche d'une œuvre de la bibliothèque
-    recharger: chargerContenus, // recharge toutes les fiches (après un ajout depuis le catalogue)
+    recharger: () => chargerContenus({ silencieux: true }), // recharge les fiches sans remonter en haut de page
     rafraichirOnglets: () => afficherOnglets(),
     fermerSeance,
     aujourdhui,
