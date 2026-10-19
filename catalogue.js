@@ -13,7 +13,7 @@
   const PAGE_SUPABASE = 1000;
   const LOT_QIDS = 300;          // filtre Personne : au-delà, la liste de QIDs est découpée
   const DELAI_FRAPPE = 250;
-  const COLONNES = "qid,titre,annee,type,createur,genre,image_url,nb_personnes";
+  const COLONNES = "qid,titre,annee,type,createur,genre,image_url,nb_personnes,bande_annonce,producteur,acteurs_principaux";
   const LIBELLES_TYPE = { film: "Film", serie: "Série", autre: "Autre" };
   const ICONE_AJOUT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
 
@@ -276,27 +276,29 @@
   function carteDe(c, i) {
     const type = typeDe(c);
     const icone = iconeDe(type);
-    const nb = c.nb_personnes || 0;
     const cellule = document.createElement("div");
-    cellule.className = "catalogue-item catalogue-cellule";
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "carte";
-    b.dataset.qid = c.qid;
-    b.dataset.type = type;
-    b.style.animationDelay = `${Math.min(i % PAR_PAGE, 12) * 40}ms`;
-    b.innerHTML = `
+    cellule.className = "catalogue-item catalogue-cellule carte carte-v2";
+    cellule.dataset.qid = c.qid;
+    cellule.dataset.type = type;
+    cellule.style.animationDelay = `${Math.min(i % PAR_PAGE, 12) * 40}ms`;
+    cellule.innerHTML = `
+      <button type="button" class="carte-lien" aria-label="${esc(c.titre)}"></button>
       <div class="affiche">
         ${c.image_url ? `<img src="${esc(c.image_url)}" alt="" loading="lazy">` : `<div class="affiche-vide">${icone}</div>`}
-        <span class="badge badge-type">${LIBELLES_TYPE[type]}</span>
-        ${c.annee ? `<span class="badge badge-info">${esc(c.annee)}</span>` : ""}
+      </div>
+      <div class="carte-boutons">
+        ${c.bande_annonce
+          ? `<button type="button" class="cb-ba" aria-label="Bande-annonce de ${esc(c.titre)}">▶ Bande-annonce</button>`
+          : `<button type="button" class="cb-ba" disabled aria-label="Pas de bande-annonce">▶ Bande-annonce</button>`}
+        <span class="cb-type">${LIBELLES_TYPE[type]}</span>
+        <button type="button" class="cb-vu" aria-label="Marquer « ${esc(c.titre)} » comme vu">✓ Vu</button>
       </div>
       <div class="carte-corps">
         <h3 class="carte-titre">${esc(c.titre)}</h3>
-        ${c.createur ? `<p class="carte-createur">${esc(c.createur)}</p>` : ""}
-        <p class="carte-personnes">${nb} personne${nb > 1 ? "s" : ""} que tu connais</p>
+        ${c.producteur ? `<p class="carte-info"><span>Producteur</span>${esc(c.producteur)}</p>` : ""}
+        ${c.acteurs_principaux ? `<p class="carte-info"><span>Acteurs</span>${esc(c.acteurs_principaux)}</p>` : ""}
       </div>`;
-    const img = b.querySelector("img");
+    const img = cellule.querySelector("img");
     if (img) {
       img.addEventListener("error", () => {
         const v = document.createElement("div");
@@ -305,17 +307,18 @@
         img.replaceWith(v);
       }, { once: true });
     }
-    b.addEventListener("click", () => ouvrirFiche(c.qid));
-    // Bouton « ✓ Vu » : ajoute directement l'œuvre comme vue, sans ouvrir la fiche.
-    const vu = document.createElement("button");
-    vu.type = "button";
-    vu.className = "carte-vu";
-    vu.textContent = "✓ Vu";
-    vu.setAttribute("aria-label", `Marquer « ${c.titre} » comme vu`);
+    cellule.querySelector(".carte-lien").addEventListener("click", () => ouvrirFiche(c.qid));
+    cellule.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      ouvrirFiche(c.qid);
+    });
+    const ba = cellule.querySelector(".cb-ba");
+    if (c.bande_annonce) ba.addEventListener("click", (e) => { e.stopPropagation(); BIB.lireBandeAnnonce(c.bande_annonce, c.titre); });
+    const vu = cellule.querySelector(".cb-vu");
     vu.addEventListener("click", (e) => { e.stopPropagation(); ajouter(vu, { vu: true, ligne: c }); });
-    cellule.append(b, vu);
     return cellule;
   }
+
 
   function rendreCartes(debut, fin) {
     for (let i = debut; i < fin; i++) etat.pied.before(carteDe(etat.lignes[i], i));
@@ -675,6 +678,7 @@
     if (!ligne) fermerFiche();
     const carte = etat.grille && etat.grille.querySelector(`.carte[data-qid="${CSS.escape(c.qid)}"]`);
     if (carte) (carte.closest(".catalogue-cellule") || carte).remove();
+    else { const cel = etat.grille && etat.grille.querySelector(`.catalogue-cellule[data-qid="${CSS.escape(c.qid)}"]`); if (cel) cel.remove(); }
     BIB.toast(vu ? "Marqué comme vu" : "Ajouté à ta liste À voir");
     if (window.Personnes && window.Personnes.invaliderCache) window.Personnes.invaliderCache();
     await BIB.recharger();   // recharge la bibliothèque ; app.js rappelle Catalogue.afficher()

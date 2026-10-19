@@ -210,35 +210,39 @@
 
   function carte(c, i) {
     const type = TYPES.find((t) => t.id === c.type);
-    // Div et non button : le bouton « ✓ Vu » ne peut pas être imbriqué dans un bouton.
+    const cinema = c.type === "film" || c.type === "serie";
+    // Div et non button : les boutons de la carte ne peuvent pas être imbriqués dans un bouton.
     // L'ouverture de la fiche passe par .carte-lien (clavier) ; la délégation sur #grille couvre aussi les clics.
     const b = document.createElement("div");
-    b.className = "carte";
+    b.className = "carte carte-v2";
     b.dataset.type = c.type;
     b.dataset.id = c.id;
     b.style.animationDelay = `${Math.min(i, 12) * 40}ms`;
     const image = c.image_url
       ? `<img src="${echapper(c.image_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'affiche-vide',innerHTML:'${ICONES[c.type].replace(/"/g, "&quot;")}'}))">`
       : `<div class="affiche-vide">${ICONES[c.type]}</div>`;
-    const boutonVu = c.statut !== "termine"
-      ? '<button type="button" class="carte-vu" data-vu aria-label="Marquer comme vu">✓ Vu</button>'
-      : "";
+    const vu = c.statut === "termine";
+    const infos = cinema
+      ? `${c.producteur ? `<p class="carte-info"><span>Producteur</span>${echapper(c.producteur)}</p>` : ""}
+         ${c.acteurs_principaux ? `<p class="carte-info"><span>Acteurs</span>${echapper(c.acteurs_principaux)}</p>` : ""}`
+      : (c.createur ? `<p class="carte-info"><span>${echapper(CREATEUR[c.type] ? CREATEUR[c.type].label : "Créateur")}</span>${echapper(c.createur)}</p>` : "");
     b.innerHTML = `
       <button type="button" class="carte-lien" aria-label="${echapper(c.titre)}"></button>
-      <div class="affiche">
-        ${image}
-        <span class="badge badge-type">${type ? type.seul : ""}</span>
-        <span class="badge badge-info">${echapper(progression(c))}</span>
-        ${boutonVu}
+      <div class="affiche">${image}</div>
+      <div class="carte-boutons">
+        ${cinema ? (c.bande_annonce
+          ? `<button type="button" class="cb-ba" data-ba aria-label="Bande-annonce de ${echapper(c.titre)}">▶ Bande-annonce</button>`
+          : `<button type="button" class="cb-ba" disabled aria-label="Pas de bande-annonce">▶ Bande-annonce</button>`) : ""}
+        <span class="cb-type">${type ? type.seul : ""}</span>
+        <button type="button" class="cb-vu${vu ? " ok" : ""}" data-vu aria-pressed="${vu}" aria-label="${vu ? "Annuler le visionnage" : "Marquer comme vu"}">✓ Vu</button>
       </div>
       <div class="carte-corps">
         <h3 class="carte-titre">${echapper(c.titre)}</h3>
-        ${c.createur ? `<p class="carte-createur">${echapper(c.createur)}</p>` : ""}
-        ${etoiles(c.note)}
-        <p class="carte-avis ${c.avis ? "" : "sans-avis"}">${c.avis ? echapper(c.avis) : c.note == null ? "Pas encore noté" : "Pas d'avis"}</p>
+        ${infos}
       </div>`;
     return b;
   }
+
 
   function etatVide(titre, texte, bouton) {
     const d = document.createElement("div");
@@ -483,6 +487,62 @@
   }
 
   /* ---------- Vu rapide : statut « termine » puis notation légère ---------- */
+  // « ✓ Vu » : marque comme vu, ou annule le visionnage si la fiche est déjà terminée.
+  async function basculerVu(id, declencheur) {
+    const c = etat.contenus.find((x) => x.id === id);
+    if (!c) return;
+    if (c.statut !== "termine") return marquerVu(id, declencheur);
+    if (declencheur) declencheur.disabled = true;
+    const { data, error } = await sb.from("contenus")
+      .update({ statut: "a_voir", date_visionnage: null, nb_visionnages: 0 })
+      .eq("id", id).select("*, episodes(saison, episode)").single();
+    if (error) {
+      if (declencheur) declencheur.disabled = false;
+      toast("Impossible d'annuler. Réessaie.");
+      return;
+    }
+    etat.contenus = etat.contenus.map((x) => (x.id === data.id ? data : x));
+    afficher();
+    toast("Visionnage annulé");
+    if (SEANCE.ouverte && SEANCE.mode === "fiche" && SEANCE.fiche && SEANCE.fiche.id === id) ouvrirFiche(id);
+  }
+
+  // Lecteur de bande-annonce (YouTube, sans cookies) en surimpression.
+  let lecteurBA = null;
+  function lireBandeAnnonce(url, titre) {
+    const m = String(url || "").match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/);
+    if (!m) { window.open(url, "_blank", "noopener"); return; }
+    fermerBandeAnnonce();
+    const focusAvant = document.activeElement;
+    const fond = document.createElement("div");
+    fond.className = "ba-fond";
+    fond.setAttribute("role", "dialog");
+    fond.setAttribute("aria-modal", "true");
+    fond.setAttribute("aria-label", `Bande-annonce : ${titre || ""}`);
+    fond.innerHTML = `
+      <div class="ba-cadre">
+        <iframe src="https://www.youtube-nocookie.com/embed/${m[1]}?autoplay=1&rel=0" title="Bande-annonce : ${echapper(titre || "")}"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
+        <button type="button" class="btn-icone ba-fermer" aria-label="Fermer la bande-annonce"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>`;
+    const surTouche = (e) => { if (e.key === "Escape") { e.stopPropagation(); fermerBandeAnnonce(); } };
+    fond.addEventListener("click", (e) => { if (e.target === fond) fermerBandeAnnonce(); });
+    fond.querySelector(".ba-fermer").addEventListener("click", () => fermerBandeAnnonce());
+    document.addEventListener("keydown", surTouche, true);
+    document.body.append(fond);
+    document.body.classList.add("ba-ouverte");
+    lecteurBA = { fond, surTouche, focusAvant };
+    fond.querySelector(".ba-fermer").focus();
+  }
+  function fermerBandeAnnonce() {
+    if (!lecteurBA) return;
+    document.removeEventListener("keydown", lecteurBA.surTouche, true);
+    lecteurBA.fond.remove();
+    document.body.classList.remove("ba-ouverte");
+    if (lecteurBA.focusAvant && document.contains(lecteurBA.focusAvant)) lecteurBA.focusAvant.focus();
+    lecteurBA = null;
+  }
+
   async function marquerVu(id, declencheur) {
     const c = etat.contenus.find((x) => x.id === id);
     if (!c || (declencheur && declencheur.disabled)) return;
@@ -1368,7 +1428,14 @@
   el.grille.addEventListener("click", (e) => {
     const c = e.target.closest(".carte");
     if (!c || !c.dataset.id) return; // cartes du catalogue : gérées par catalogue.js
-    if (e.target.closest("[data-vu]")) { marquerVu(c.dataset.id, e.target.closest("[data-vu]")); return; } // ne doit pas ouvrir la fiche
+    const btnVu = e.target.closest("[data-vu]");
+    if (btnVu) { basculerVu(c.dataset.id, btnVu); return; } // ne doit pas ouvrir la fiche
+    if (e.target.closest(".cb-ba")) {
+      const f = etat.contenus.find((x) => x.id === c.dataset.id);
+      if (f && f.bande_annonce) lireBandeAnnonce(f.bande_annonce, f.titre);
+      return;
+    }
+    if (e.target.closest(".cb-type")) { /* simple étiquette */ }
     ouvrirFiche(c.dataset.id);
   });
   el.btnMenu.addEventListener("click", (e) => { e.stopPropagation(); basculerMenu(); });
@@ -1391,6 +1458,7 @@
     ouvrirFiche,          // ouvrirFiche(idContenu) : ouvre la fiche d'une œuvre de la bibliothèque
     recharger: () => chargerContenus({ silencieux: true }), // recharge les fiches sans remonter en haut de page
     rafraichirOnglets: () => afficherOnglets(),
+    lireBandeAnnonce, // lireBandeAnnonce(urlYoutube, titre) : lecteur en surimpression
     // majContenu(id, champs) → met à jour une fiche (ex. { statut: "a_voir" }), rafraîchit la liste ; renvoie true/false
     majContenu: async (id, champs) => {
       const { data, error } = await sb.from("contenus").update(champs).eq("id", id).select("*, episodes(saison, episode)").single();

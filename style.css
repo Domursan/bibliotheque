@@ -622,3 +622,64 @@ body.sans-animations *, body.sans-animations *::before, body.sans-animations *::
   .vu-boite { padding: 20px 16px 16px; }
   .vu-titre { font-size: 23px; }
 }
+
+/* ==========================================================
+   Carte v2 — boutons sous l'affiche (bande-annonce / type / vu)
+   ========================================================== */
+.carte.carte-v2 { display: flex; flex-direction: column; text-align: left; }
+.carte-v2 .affiche::after { display: none; }
+.carte-boutons {
+  position: relative; z-index: 2;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 12px 12px 0;
+}
+.carte-boutons .cb-ba { grid-column: 1 / -1; }
+.cb-ba, .cb-type, .cb-vu {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  height: 32px; padding: 0 10px; border-radius: 999px;
+  font: 600 12px var(--sans); white-space: nowrap; line-height: 1;
+}
+.cb-ba {
+  height: 40px; font-size: 13.5px; cursor: pointer;
+  background: var(--or); color: #1c1012; border: 1px solid var(--or);
+  transition: background .2s, transform .15s;
+}
+.cb-ba:hover:not(:disabled) { background: var(--or-clair); }
+.cb-ba:active:not(:disabled) { transform: scale(.98); }
+.cb-ba:disabled { background: #5d5552; border-color: #5d5552; color: #2a2422; cursor: not-allowed; }
+.cb-type {
+  border: 1px solid rgba(217, 179, 108, .35); color: var(--or);
+  background: rgba(255, 255, 255, .03);
+}
+.cb-vu {
+  cursor: pointer; background: transparent;
+  border: 1px solid var(--or); color: var(--or);
+  transition: background .2s, color .2s, border-color .2s;
+}
+.cb-vu:hover { background: rgba(217, 179, 108, .14); }
+.cb-vu.ok { background: rgba(126, 211, 161, .12); border-color: #7ed3a1; color: #7ed3a1; }
+.cb-vu.ok:hover { background: rgba(240, 138, 122, .12); border-color: var(--danger); color: var(--danger); }
+.cb-vu:disabled { opacity: .5; cursor: wait; }
+.cb-ba:focus-visible, .cb-vu:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+
+.carte-v2 .carte-corps { gap: 0; padding-top: 12px; }
+.carte-v2 .carte-titre { margin-bottom: 4px; }
+.carte-info { margin: 6px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--texte-2); }
+.carte-info span {
+  display: block; margin-bottom: 1px;
+  font-size: 10.5px; font-weight: 500; letter-spacing: 1.2px; text-transform: uppercase; color: var(--texte-3);
+}
+
+/* Lecteur de bande-annonce */
+body.ba-ouverte { overflow: hidden; }
+.ba-fond {
+  position: fixed; inset: 0; z-index: 49;
+  display: grid; place-items: center; padding: 16px;
+  background: rgba(6, 3, 4, .85); backdrop-filter: blur(4px);
+  animation: vu-apparait .2s ease both;
+}
+.ba-cadre { position: relative; width: min(960px, 100%); aspect-ratio: 16 / 9; background: #000; border-radius: 12px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+.ba-cadre iframe { width: 100%; height: 100%; border: 0; border-radius: 12px; display: block; }
+.ba-fermer { position: absolute; top: -48px; right: 0; }
+.ba-fermer svg { fill: none; stroke: var(--creme); stroke-width: 2; stroke-linecap: round; }
+.entete-actions .btn-sobre, .entete-actions .btn-or { white-space: nowrap; }
