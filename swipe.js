@@ -578,6 +578,8 @@
     if (avant && avant.isConnected && typeof avant.focus === "function") avant.focus();
 
     await Promise.allSettled([...enAttente]);   // attend les actions encore en cours
+    // Les décisions (vu / pas vu / à voir) changent le contenu des onglets Catalogue et Non vus.
+    if (window.Catalogue && window.Catalogue.rafraichir) window.Catalogue.rafraichir();
     if (etat.modifie) {
       etat.modifie = false;
       if (window.Personnes && window.Personnes.invaliderCache) window.Personnes.invaliderCache();

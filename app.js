@@ -23,7 +23,8 @@
     { id: "article", label: "Articles", type: "article" },
     { id: "a_voir", label: "À voir", statut: "a_voir" },
     { id: "incertain", label: "Incertains", statut: "incertain" },
-    { id: "catalogue", label: "Catalogue", catalogue: true }, // géré par catalogue.js
+    { id: "catalogue", label: "Catalogue", catalogue: true }, // géré par catalogue.js (œuvres pas encore triées)
+    { id: "non_vus", label: "Non vus", catalogue: true },     // œuvres du catalogue marquées « pas vu » dans le tri rapide
   ];
   const STATUTS = { a_voir: "À voir", en_cours: "En cours", termine: "Terminé", abandonne: "Abandonné", incertain: "Incertain" };
   const ICONES = {
@@ -263,7 +264,7 @@
   const ongletCourant = () => ONGLETS.find((o) => o.id === etat.onglet) || ONGLETS[0];
   const dansOnglet = (o, c) => (o.catalogue ? false : o.type ? c.type === o.type : o.statut ? c.statut === o.statut : true);
   const compteOnglet = (o) => (o.catalogue
-    ? (window.Catalogue && window.Catalogue.total != null ? window.Catalogue.total : "")
+    ? (window.Catalogue ? ((o.id === "non_vus" ? window.Catalogue.totalNonVus : window.Catalogue.total) ?? "") : "")
     : etat.contenus.filter((c) => dansOnglet(o, c)).length);
   const minuscules = (s) => (s || "").trim().toLowerCase();
   const genresDe = (c) => (c.genre || "").split(",").map((g) => g.trim()).filter(Boolean);
@@ -443,7 +444,7 @@
     el.filtres.hidden = Boolean(o.catalogue);
     if (o.catalogue) {
       afficherOnglets();
-      if (window.Catalogue) window.Catalogue.afficher(el.grille, el.recherche.value.trim());
+      if (window.Catalogue) window.Catalogue.afficher(el.grille, el.recherche.value.trim(), o.id);
       return;
     }
     if (o.statut) el.statut.value = "";

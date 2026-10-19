@@ -54,6 +54,8 @@
   // Filtres communs (type, genre, créateur, titre, liste de QIDs).
   function appliquer(q, qids) {
     const f = etat.filtres;
+    // « Catalogue » = œuvres pas encore triées ; « Non vus » = marquées « pas vu » dans le tri rapide.
+    q = etat.mode === "non_vus" ? q.eq("decision", "pas_vu") : q.is("decision", null);
     if (f.type === "film" || f.type === "serie") q = q.eq("type", f.type);
     else if (f.type === "autre") q = q.or("type.is.null,type.eq.autre");
     if (f.genre) q = q.ilike("genre", motif(f.genre));
@@ -114,9 +116,14 @@
   function chargerTotal() {
     if (etat.totalDemande) return;
     etat.totalDemande = true;
-    BIB.sb.from("catalogue").select("qid", { count: "exact", head: true }).then(({ count, error }) => {
+    BIB.sb.from("catalogue").select("qid", { count: "exact", head: true }).is("decision", null).then(({ count, error }) => {
       if (error) { console.error("catalogue.js : total", error); etat.totalDemande = false; return; }
       etat.total = count ?? 0;
+      BIB.rafraichirOnglets();
+    });
+    BIB.sb.from("catalogue").select("qid", { count: "exact", head: true }).eq("decision", "pas_vu").then(({ count, error }) => {
+      if (error) return;
+      etat.totalNonVus = count ?? 0;
       BIB.rafraichirOnglets();
     });
   }
@@ -673,7 +680,8 @@
       return;
     }
 
-    if (etat.total != null) etat.total = Math.max(0, etat.total - 1);
+    if (etat.mode === "non_vus") { if (etat.totalNonVus != null) etat.totalNonVus = Math.max(0, etat.totalNonVus - 1); }
+    else if (etat.total != null) etat.total = Math.max(0, etat.total - 1);
     BIB.rafraichirOnglets();
     if (!ligne) fermerFiche();
     const carte = etat.grille && etat.grille.querySelector(`.carte[data-qid="${CSS.escape(c.qid)}"]`);
@@ -687,11 +695,14 @@
 
   /* ---------- Pont ---------- */
 
-  function afficher(grille, recherche = "") {
+  function afficher(grille, recherche = "", mode = "catalogue") {
     chargerTotal();
     chargerPersonnes();
     const rech = String(recherche ?? "").trim();
-    const enPlace = etat.grille === grille && etat.barre && grille.contains(etat.barre);
+    const nouveauMode = mode === "non_vus" ? "non_vus" : "catalogue";
+    const changeMode = etat.mode !== nouveauMode;
+    etat.mode = nouveauMode;
+    const enPlace = !changeMode && etat.grille === grille && etat.barre && grille.contains(etat.barre);
     if (!enPlace) {
       etat.filtres.recherche = rech;
       construireBarre(grille);
@@ -714,5 +725,13 @@
     },
     ouvrirFiche,
     get total() { return etat.total; },
+    get totalNonVus() { return etat.totalNonVus; },
+    // À appeler après des décisions « pas vu » (tri rapide) pour recompter les deux onglets.
+    recompter() { etat.totalDemande = false; chargerTotal(); },
+    // Recompte et recharge la liste affichée (après un tri rapide).
+    rafraichir() {
+      etat.totalDemande = false; chargerTotal();
+      if (etat.barre && etat.grille && etat.grille.contains(etat.barre)) charger();
+    },
   };
 })();
