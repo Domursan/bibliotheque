@@ -138,16 +138,25 @@
   /* ---------- Données ---------- */
   async function chargerContenus() {
     el.grille.innerHTML = '<div class="squelette"></div>'.repeat(6);
-    const { data, error } = await sb
-      .from("contenus")
-      .select("*, episodes(saison, episode)")
-      .order("created_at", { ascending: false });
-    if (error) {
-      el.grille.innerHTML = "";
-      el.grille.append(etatVide("Projection interrompue", "Impossible de charger ta bibliothèque. Recharge la page pour réessayer."));
-      return;
+    // Supabase renvoie au maximum 1000 lignes par requête : on charge par pages.
+    const PAGE = 1000;
+    const tout = [];
+    for (let debut = 0; ; debut += PAGE) {
+      const { data, error } = await sb
+        .from("contenus")
+        .select("*, episodes(saison, episode)")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(debut, debut + PAGE - 1);
+      if (error) {
+        el.grille.innerHTML = "";
+        el.grille.append(etatVide("Projection interrompue", "Impossible de charger ta bibliothèque. Recharge la page pour réessayer."));
+        return;
+      }
+      tout.push(...(data || []));
+      if (!data || data.length < PAGE) break;
     }
-    etat.contenus = data || [];
+    etat.contenus = tout;
     afficher();
   }
 
