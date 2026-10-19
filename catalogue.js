@@ -552,6 +552,7 @@
           ${blocCasting("Casting", casting.acteurs)}
           <div class="fiche-actions">
             <button class="btn-or" type="button" data-action="ajouter">${ICONE_AJOUT}Ajouter à ma bibliothèque</button>
+            <button class="btn-sobre" type="button" data-action="vu">Je l'ai vu</button>
           </div>
         </div>
       </article>`;
@@ -602,16 +603,13 @@
       if (window.Personnes) window.Personnes.ouvrirPersonne(id);
       return;
     }
-    const bouton = e.target.closest('[data-action="ajouter"]');
-    if (bouton) ajouter(bouton);
+    const bouton = e.target.closest('[data-action="ajouter"], [data-action="vu"]');
+    if (bouton) ajouter(bouton, { vu: bouton.dataset.action === "vu" });
   }
 
-  // Passe une œuvre du catalogue dans la bibliothèque (statut « À voir »).
-  async function ajouter(bouton) {
-    const F = etat.fiche;
-    const c = F && F.ligne;
-    if (!c || bouton.disabled) return;
-    bouton.disabled = true;
+  // Insère l'œuvre de la fiche dans la bibliothèque (champs propres au statut), lie ses participations
+  // et la retire du catalogue. Renvoie l'id du contenu créé, ou null en cas d'échec (insertion annulée).
+  async function passerDansBibliotheque(c, champs) {
     const type = c.type === "serie" ? "serie" : "film";
     const genre = (c.genre || "").split(",")[0].trim() || null;
     let nouvelId = null;
@@ -623,11 +621,11 @@
         annee: c.annee,
         createur: c.createur,
         genre,
-        statut: "a_voir",
         image_url: c.image_url,
         lien: wikidata(c.qid),
         wikidata: c.qid,
         tags: ["catalogue"],
+        ...champs,
       }).select("id").single();
       if (error) throw error;
       nouvelId = data.id;
@@ -638,10 +636,26 @@
 
       const retrait = await BIB.sb.from("catalogue").delete().eq("qid", c.qid);
       if (retrait.error) throw retrait.error;
+      return nouvelId;
     } catch (err) {
       console.error("catalogue.js : ajout", err);
       // Liaison non faite : on annule l'insertion pour ne pas laisser de doublon.
       if (nouvelId && !liee) await BIB.sb.from("contenus").delete().eq("id", nouvelId).then(() => {}, () => {});
+      return null;
+    }
+  }
+
+  // Un seul chemin pour « Ajouter à ma bibliothèque » (À voir) et « Je l'ai vu » (terminé + notation).
+  async function ajouter(bouton, { vu = false } = {}) {
+    const F = etat.fiche;
+    const c = F && F.ligne;
+    if (!c || bouton.disabled) return;
+    bouton.disabled = true;
+    const champs = vu
+      ? { statut: "termine", date_visionnage: BIB.aujourdhui(), nb_visionnages: 1 }
+      : { statut: "a_voir" };
+    const nouvelId = await passerDansBibliotheque(c, champs);
+    if (!nouvelId) {
       bouton.disabled = false;
       BIB.toast("Ajout impossible. Réessaie.");
       return;
@@ -652,9 +666,10 @@
     fermerFiche();
     const carte = etat.grille && etat.grille.querySelector(`.carte[data-qid="${CSS.escape(c.qid)}"]`);
     if (carte) carte.remove();
-    BIB.toast("Ajouté à ta liste À voir");
+    BIB.toast(vu ? "Marqué comme vu" : "Ajouté à ta liste À voir");
     if (window.Personnes && window.Personnes.invaliderCache) window.Personnes.invaliderCache();
     await BIB.recharger();   // recharge la bibliothèque ; app.js rappelle Catalogue.afficher()
+    if (vu) BIB.noterRapide(nouvelId); // boîte de notation, sur la fiche fraîchement rechargée
   }
 
   /* ---------- Pont ---------- */

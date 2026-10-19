@@ -562,3 +562,63 @@ fieldset.form-champ { border: 0; margin: 0; padding: 0; min-width: 0; }
 body.sans-animations *, body.sans-animations *::before, body.sans-animations *::after {
   animation: none !important; transition-duration: .01ms !important; transition-delay: 0s !important;
 }
+
+/* ==========================================================
+   Vu rapide
+   Bouton « ✓ Vu » sur les cartes, bouton lien clavier, boîte de notation
+   ========================================================== */
+.carte { position: relative; }
+
+/* Bouton couvrant la carte : focus clavier et nom accessible. Les clics passent par la délégation sur #grille. */
+.carte-lien {
+  position: absolute; inset: 0; z-index: 1; margin: 0; padding: 0;
+  background: none; border: 0; border-radius: 14px; cursor: pointer;
+}
+.carte-lien:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+
+.carte-vu {
+  position: absolute; right: 10px; bottom: 10px; z-index: 2;
+  height: 32px; padding: 0 12px; border-radius: 999px;
+  background: rgba(14, 8, 10, .85); border: 1px solid var(--or); color: var(--or);
+  font-size: 12px; font-weight: 600; line-height: 1; cursor: pointer;
+  opacity: 0; transition: opacity .2s, background .2s, color .2s;
+}
+.carte:hover .carte-vu, .carte:focus-within .carte-vu, .carte-vu:focus-visible { opacity: 1; }
+.carte-vu:hover { background: var(--or); color: #1c1012; }
+.carte-vu:focus-visible { outline: 2px solid var(--or); outline-offset: 2px; }
+.carte-vu:disabled { opacity: .5; cursor: wait; }
+@media (hover: none) { .carte-vu { opacity: 1; } }
+
+/* Boîte de notation (au-dessus de la séance et des overlays) */
+.vu-fond {
+  position: fixed; inset: 0; z-index: 48;
+  display: grid; place-items: center; padding: 16px;
+  background: rgba(8, 4, 6, .72); backdrop-filter: blur(3px);
+  animation: vu-apparait .25s ease both;
+}
+@keyframes vu-apparait { from { opacity: 0; } }
+.vu-boite {
+  width: min(100%, 440px); max-height: calc(100vh - 32px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 24px 22px 20px; background: var(--ecran);
+  border: 1px solid var(--trait); border-radius: 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+}
+.vu-titre { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 26px; line-height: 1.15; color: var(--creme); }
+.vu-oeuvre { margin: -8px 0 0; font-size: 14px; color: var(--texte-2); }
+.vu-note { display: flex; flex-direction: column; gap: 6px; }
+.vu-etiquette { font-size: 13px; color: var(--texte-2); }
+.vu-avis { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--texte-2); }
+.vu-avis em { font-style: normal; color: var(--texte-3); }
+.vu-avis textarea {
+  width: 100%; min-height: 64px; padding: 10px 12px; resize: vertical;
+  background: #1f1316; border: 1px solid var(--trait); border-radius: 10px;
+  color: var(--creme); font-size: 15px; line-height: 1.4;
+}
+.vu-avis textarea::placeholder { color: var(--texte-3); }
+.vu-avis textarea:focus { outline: none; border-color: var(--or); box-shadow: 0 0 0 3px rgba(217, 179, 108, .15); }
+.vu-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.vu-actions button:disabled { opacity: .6; cursor: wait; }
+@media (max-width: 720px) {
+  .vu-boite { padding: 20px 16px 16px; }
+  .vu-titre { font-size: 23px; }
+}

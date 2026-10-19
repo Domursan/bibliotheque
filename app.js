@@ -209,8 +209,9 @@
 
   function carte(c, i) {
     const type = TYPES.find((t) => t.id === c.type);
-    const b = document.createElement("button");
-    b.type = "button";
+    // Div et non button : le bouton « ✓ Vu » ne peut pas être imbriqué dans un bouton.
+    // L'ouverture de la fiche passe par .carte-lien (clavier) ; la délégation sur #grille couvre aussi les clics.
+    const b = document.createElement("div");
     b.className = "carte";
     b.dataset.type = c.type;
     b.dataset.id = c.id;
@@ -218,11 +219,16 @@
     const image = c.image_url
       ? `<img src="${echapper(c.image_url)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'affiche-vide',innerHTML:'${ICONES[c.type].replace(/"/g, "&quot;")}'}))">`
       : `<div class="affiche-vide">${ICONES[c.type]}</div>`;
+    const boutonVu = c.statut !== "termine"
+      ? '<button type="button" class="carte-vu" data-vu aria-label="Marquer comme vu">✓ Vu</button>'
+      : "";
     b.innerHTML = `
+      <button type="button" class="carte-lien" aria-label="${echapper(c.titre)}"></button>
       <div class="affiche">
         ${image}
         <span class="badge badge-type">${type ? type.seul : ""}</span>
         <span class="badge badge-info">${echapper(progression(c))}</span>
+        ${boutonVu}
       </div>
       <div class="carte-corps">
         <h3 class="carte-titre">${echapper(c.titre)}</h3>
@@ -468,6 +474,107 @@
     minuteurToast = setTimeout(() => el.toast.classList.remove("visible"), 2600);
   }
 
+  /* ---------- Vu rapide : statut « termine » puis notation légère ---------- */
+  async function marquerVu(id, declencheur) {
+    const c = etat.contenus.find((x) => x.id === id);
+    if (!c || (declencheur && declencheur.disabled)) return;
+    if (declencheur) declencheur.disabled = true;
+    const { data, error } = await sb.from("contenus")
+      .update({ statut: "termine", date_visionnage: c.date_visionnage || aujourdhui(), nb_visionnages: Math.max(1, c.nb_visionnages || 0) })
+      .eq("id", id).select("*, episodes(saison, episode)").single();
+    if (error) {
+      if (declencheur) declencheur.disabled = false;
+      toast("Impossible de marquer comme vu. Réessaie.");
+      return;
+    }
+    etat.contenus = etat.contenus.map((x) => (x.id === data.id ? data : x));
+    afficher();
+    toast("Marqué comme vu");
+    if (SEANCE.ouverte && SEANCE.mode === "fiche" && SEANCE.fiche && SEANCE.fiche.id === id) ouvrirFiche(id);
+    ouvrirNotation(data);
+  }
+
+  let notation = null; // { fond, focusAvant, surTouche } quand la boîte est ouverte
+  function ouvrirNotation(c) {
+    fermerNotation();
+    const fond = document.createElement("div");
+    fond.className = "vu-fond";
+    fond.innerHTML = `
+      <div class="vu-boite" role="dialog" aria-modal="true" aria-labelledby="vu-titre">
+        <h2 class="vu-titre" id="vu-titre">Vu ! Tu lui mets combien ?</h2>
+        <p class="vu-oeuvre">${echapper(c.titre)}</p>
+        <div class="vu-note">
+          <span class="vu-etiquette" id="vu-note-label">Note</span>
+          <div class="choix-note">
+            <div class="etoiles-saisie" role="slider" tabindex="0" aria-labelledby="vu-note-label"
+                 aria-valuemin="0" aria-valuemax="5" data-note="${c.note ?? ""}"></div>
+            <span class="choix-note-valeur" data-note-valeur></span>
+          </div>
+        </div>
+        <label class="vu-avis">
+          <span>Avis <em>(facultatif)</em></span>
+          <textarea rows="2" maxlength="5000" placeholder="Un mot sur ce que tu en as pensé.">${echapper(c.avis || "")}</textarea>
+        </label>
+        <div class="vu-actions">
+          <button type="button" class="btn-sobre" data-vu-action="plus-tard">Plus tard</button>
+          <button type="button" class="btn-or" data-vu-action="enregistrer">Enregistrer</button>
+        </div>
+      </div>`;
+    document.body.append(fond);
+    const boite = fond.querySelector(".vu-boite");
+    const zone = fond.querySelector(".etoiles-saisie");
+    const avis = fond.querySelector("textarea");
+    initialiserEtoiles(zone);
+
+    // Escape ferme sans rien changer ; Tab reste dans la boîte. Capture : la séance dessous ne reçoit pas la touche.
+    const surTouche = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); fermerNotation(); return; }
+      if (e.key !== "Tab") return;
+      const focusables = [...boite.querySelectorAll("button:not([disabled]), textarea, [tabindex=\"0\"]")];
+      const premier = focusables[0], dernier = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === premier) { e.preventDefault(); dernier.focus(); }
+      else if (!e.shiftKey && document.activeElement === dernier) { e.preventDefault(); premier.focus(); }
+    };
+    document.addEventListener("keydown", surTouche, true);
+    notation = { fond, focusAvant: document.activeElement, surTouche };
+
+    fond.querySelector('[data-vu-action="plus-tard"]').addEventListener("click", () => fermerNotation());
+    const enregistrer = fond.querySelector('[data-vu-action="enregistrer"]');
+    enregistrer.addEventListener("click", async () => {
+      const boutons = fond.querySelectorAll("button");
+      boutons.forEach((b) => { b.disabled = true; });
+      const { data, error } = await sb.from("contenus")
+        .update({ note: lireNote(zone), avis: avis.value.trim() || null })
+        .eq("id", c.id).select("*, episodes(saison, episode)").single();
+      if (error) {
+        boutons.forEach((b) => { b.disabled = false; });
+        toast("Mise à jour impossible. Réessaie.");
+        return;
+      }
+      etat.contenus = etat.contenus.map((x) => (x.id === data.id ? data : x));
+      const ficheOuverte = SEANCE.ouverte && SEANCE.mode === "fiche" && SEANCE.fiche && SEANCE.fiche.id === c.id;
+      fermerNotation();
+      afficher();
+      if (ficheOuverte) ouvrirFiche(c.id);
+      toast("Note enregistrée");
+    });
+
+    zone.focus({ preventScroll: true });
+  }
+
+  function fermerNotation() {
+    if (!notation) return;
+    const N = notation;
+    notation = null;
+    document.removeEventListener("keydown", N.surTouche, true);
+    N.fond.remove();
+    // Rend le focus à l'endroit d'où la boîte a été ouverte, ou à défaut dans la séance ou la grille.
+    const cible = (SEANCE.ouverte && SEANCE.contenu.querySelector('[data-action="modifier"]'))
+      || (N.focusAvant && N.focusAvant.isConnected && N.focusAvant)
+      || el.grille.querySelector(".carte-lien");
+    if (cible) cible.focus({ preventScroll: true });
+  }
+
   /* =========================================================
      Séance : fiche détaillée et formulaire
      ========================================================= */
@@ -483,6 +590,7 @@
   };
   const ICONE_MODIFIER = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>';
   const ICONE_SUPPRIMER = '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
+  const ICONE_VU = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7"/></svg>';
 
   const aujourdhui = () => {
     const d = new Date();
@@ -566,6 +674,7 @@
           </dl>
           <section class="casting" data-casting aria-label="Casting et production"></section>
           <div class="fiche-actions">
+            ${c.statut !== "termine" ? `<button class="btn-or" type="button" data-action="vu">${ICONE_VU}Marquer comme vu</button>` : ""}
             <button class="btn-or" type="button" data-action="modifier">${ICONE_MODIFIER}Modifier</button>
             <button class="btn-sobre btn-danger" type="button" data-action="supprimer">${ICONE_SUPPRIMER}Supprimer</button>
           </div>
@@ -1190,6 +1299,7 @@
     if (!a || SEANCE.mode !== "fiche") return;
     if (a.dataset.action === "modifier") ouvrirFormulaire(SEANCE.fiche);
     if (a.dataset.action === "supprimer") supprimer(a);
+    if (a.dataset.action === "vu") marquerVu(SEANCE.fiche.id, a);
   });
   SEANCE.racine.addEventListener("keydown", (e) => {
     if (e.key !== "Tab") return;
@@ -1247,7 +1357,12 @@
     el.btnFiltres.focus();
   });
   el.btnAjouter.addEventListener("click", ajouter);
-  el.grille.addEventListener("click", (e) => { const c = e.target.closest(".carte"); if (c) ouvrirFiche(c.dataset.id); });
+  el.grille.addEventListener("click", (e) => {
+    const c = e.target.closest(".carte");
+    if (!c || !c.dataset.id) return; // cartes du catalogue : gérées par catalogue.js
+    if (e.target.closest("[data-vu]")) { marquerVu(c.dataset.id, e.target.closest("[data-vu]")); return; } // ne doit pas ouvrir la fiche
+    ouvrirFiche(c.dataset.id);
+  });
   el.btnMenu.addEventListener("click", (e) => { e.stopPropagation(); basculerMenu(); });
   document.addEventListener("click", (e) => { if (!el.menu.hidden && !el.menu.contains(e.target)) basculerMenu(false); });
   document.addEventListener("keydown", (e) => {
@@ -1269,6 +1384,9 @@
     recharger: chargerContenus, // recharge toutes les fiches (après un ajout depuis le catalogue)
     rafraichirOnglets: () => afficherOnglets(),
     fermerSeance,
+    aujourdhui,
+    // noterRapide(idContenu) : ouvre la boîte de notation pour une fiche déjà chargée (après recharger()).
+    noterRapide: (id) => { const c = etat.contenus.find((x) => x.id === id); if (c) ouvrirNotation(c); },
   };
   el.btnAnnuaire = $("#btn-annuaire");
   if (el.btnAnnuaire) el.btnAnnuaire.addEventListener("click", () => { if (window.Personnes) window.Personnes.ouvrirAnnuaire(); });
