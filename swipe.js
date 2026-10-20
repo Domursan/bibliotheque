@@ -20,6 +20,7 @@
   const LIBELLE_TYPE = { film: "Film", serie: "Série", video: "Vidéo", article: "Article", autre: "Autre" };
   const PILES = {
     "suggestions":     { libelle: "Suggestions — peut-être vus", statut: "incertain", tag: "suggestion" },
+    "catalogue-peut-etre": { libelle: "Catalogue — peut-être vus", catalogue: true, type: null, peutEtre: true },
     "catalogue-film":  { libelle: "Catalogue — films",  catalogue: true, type: "film" },
     "catalogue-serie": { libelle: "Catalogue — séries", catalogue: true, type: "serie" },
     "catalogue-tout":  { libelle: "Catalogue — tout",   catalogue: true, type: null },
@@ -222,9 +223,10 @@
   }
 
   /* ---------- Piles ---------- */
-  async function compterCatalogue(type) {
+  async function compterCatalogue(type, peutEtre) {
     let q = BIB.sb.from("catalogue").select("qid", { count: "exact", head: true }).is("decision", null);
     if (type) q = q.eq("type", type);
+    if (peutEtre) q = q.eq("peut_etre", true);
     const { count, error } = await q;
     return error ? null : count;
   }
@@ -248,7 +250,7 @@
         nb.textContent = String(BIB.contenus.filter(dansPile(def)).length);
       } else {
         nb.textContent = "…";
-        compterCatalogue(def.type).then((n) => { nb.textContent = n == null ? "—" : String(n); });
+        compterCatalogue(def.type, def.peutEtre).then((n) => { nb.textContent = n == null ? "—" : String(n); });
       }
     }
     const premier = $(".swipe-pile");
@@ -275,7 +277,7 @@
     majAnnuler();
 
     if (p.catalogue) {
-      compterCatalogue(p.type).then((n) => { if (etat.pile === p) { p.total = n ?? 0; majCompteur(); } });
+      compterCatalogue(p.type, p.def.peutEtre).then((n) => { if (etat.pile === p) { p.total = n ?? 0; majCompteur(); } });
       chargerPlus();
     } else {
       etat.file = BIB.contenus.filter(dansPile(def)).map(depuisContenu);
@@ -297,6 +299,7 @@
     const debut = Math.max(0, p.lus - p.retires);
     let q = BIB.sb.from("catalogue").select(COLONNES).is("decision", null);
     if (p.type) q = q.eq("type", p.type);
+    if (p.def.peutEtre) q = q.eq("peut_etre", true).order("score", { ascending: false, nullsFirst: false });
     const { data, error } = await q
       .order("nb_personnes", { ascending: false })
       .order("qid", { ascending: true })
