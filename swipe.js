@@ -19,13 +19,24 @@
   const COLONNES = "qid,titre,annee,type,createur,genre,image_url,nb_personnes,bande_annonce";
   const LIBELLE_TYPE = { film: "Film", serie: "Série", video: "Vidéo", article: "Article", autre: "Autre" };
   const PILES = {
+    "suggestions":     { libelle: "Suggestions — peut-être vus", statut: "incertain", tag: "suggestion" },
     "catalogue-film":  { libelle: "Catalogue — films",  catalogue: true, type: "film" },
     "catalogue-serie": { libelle: "Catalogue — séries", catalogue: true, type: "serie" },
     "catalogue-tout":  { libelle: "Catalogue — tout",   catalogue: true, type: null },
-    "incertains":      { libelle: "Mes Incertains",     statut: "incertain" },
+    "incertains":      { libelle: "Mes Incertains",     statut: "incertain", sansTag: "suggestion" },
     "a-voir":          { libelle: "Mes À voir",         statut: "a_voir" },
   };
 
+  // Fiches de la bibliothèque qui composent une pile (statut + tag éventuel)
+  const suggestionsRetirees = new Set();   // fiches passées en « Non vus » depuis le chargement
+  const dansPile = (def) => (c) => {
+    if (suggestionsRetirees.has(c.id)) return false;
+    if (c.statut !== def.statut) return false;
+    const tags = Array.isArray(c.tags) ? c.tags : [];
+    if (def.tag && !tags.includes(def.tag)) return false;
+    if (def.sansTag && tags.includes(def.sansTag)) return false;
+    return true;
+  };
   const esc = (s) => BIB.echapper(s);
   const clamp01 = (v) => Math.min(1, Math.max(0, v));
   const iconeDe = (type) => BIB.ICONES[type] || BIB.ICONES.film;
@@ -49,7 +60,7 @@
       source: "contenu", id: c.id, titre: c.titre, annee: c.annee, type: typeDe(c.type),
       createur: c.createur, genre: c.genre, image_url: c.image_url, nb: 0,
       bande: c.bande_annonce || null, statut: c.statut, date_visionnage: c.date_visionnage,
-      nb_visionnages: c.nb_visionnages, el: null,
+      nb_visionnages: c.nb_visionnages, fiche: c, el: null,
     };
   }
 
@@ -234,7 +245,7 @@
     for (const [cle, def] of Object.entries(PILES)) {
       const nb = $(`[data-pile="${cle}"] .swipe-pile-nb`);
       if (def.statut) {
-        nb.textContent = String(BIB.contenus.filter((c) => c.statut === def.statut).length);
+        nb.textContent = String(BIB.contenus.filter(dansPile(def)).length);
       } else {
         nb.textContent = "…";
         compterCatalogue(def.type).then((n) => { nb.textContent = n == null ? "—" : String(n); });
@@ -267,7 +278,7 @@
       compterCatalogue(p.type).then((n) => { if (etat.pile === p) { p.total = n ?? 0; majCompteur(); } });
       chargerPlus();
     } else {
-      etat.file = BIB.contenus.filter((c) => c.statut === def.statut).map(depuisContenu);
+      etat.file = BIB.contenus.filter(dansPile(def)).map(depuisContenu);
       p.total = etat.file.length;
       p.fin = true;
       majDeck();
@@ -339,6 +350,9 @@
     }
 
     // Fiches de la bibliothèque
+    // Suggestions « pas vu » : la fiche quitte la bibliothèque et rejoint l'onglet « Non vus »
+    if (dir === "pasvu" && p.cle === "suggestions") return suggestionPasVue(o);
+
     let champs;
     if (dir === "pasvu") {
       if (p.cle === "a-voir") return { restaurer: true, annuler: null };   // on passe, rien à modifier
@@ -352,6 +366,40 @@
     const ok = await BIB.majContenu(o.id, champs);
     if (!ok) return null;
     return { restaurer: true, annuler: () => BIB.majContenu(o.id, avant) };
+  }
+
+  async function suggestionPasVue(o) {
+    const f = o.fiche;
+    if (!f) return null;
+    const qid = f.wikidata || null;
+    if (qid) {
+      const ligne = {
+        qid, titre: f.titre, annee: f.annee, type: f.type, createur: f.createur, genre: f.genre,
+        image_url: f.image_url, bande_annonce: f.bande_annonce, producteur: f.producteur,
+        acteurs_principaux: f.acteurs_principaux, enrichi: true, affiche_faite: true, ba_faite: true,
+        yt_fait: true, casting_fait: true, liens_faits: true,
+        decision: "pas_vu", decide_le: new Date().toISOString(),
+      };
+      const ins = await BIB.sb.from("catalogue").upsert(ligne, { onConflict: "user_id,qid" });
+      if (ins.error) return null;
+    }
+    const del = await BIB.sb.from("contenus").delete().eq("id", f.id);
+    if (del.error) {
+      if (qid) await BIB.sb.from("catalogue").delete().eq("qid", qid);
+      return null;
+    }
+    suggestionsRetirees.add(f.id);
+    return {
+      restaurer: true,
+      annuler: async () => {
+        const { episodes, ...copie } = f;   // « episodes » vient d'une jointure, pas d'une colonne
+        const r = await BIB.sb.from("contenus").insert(copie);
+        if (r.error) return false;
+        suggestionsRetirees.delete(f.id);
+        if (qid) await BIB.sb.from("catalogue").delete().eq("qid", qid);
+        return true;
+      },
+    };
   }
 
   function remettreEnTete(o) {
